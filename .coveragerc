@@ -1,0 +1,25 @@
+[run]
+source = sentinel
+omit =
+    sentinel/test/*
+    sentinel/test/fixtures/*
+    */__init__.py
+
+[report]
+# Enforce minimum coverage threshold
+fail_under = 85
+show_missing = True
+skip_covered = False
+skip_empty = True
+
+precision = 1
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    def __str__
+    raise NotImplementedError
+    if __name__ == "__main__":
+    pass
+    except ImportError
+    except SyntaxError
+    except Exception

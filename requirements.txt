@@ -1,0 +1,4 @@
+# code-review-bot dependencies
+# Core: no external dependencies required for core functionality
+# Optional: install PyYAML if reviewing files with yaml.load patterns
+# PyYAML>=6.0

@@ -1,0 +1,7 @@
+- id: code-review-bot
+  name: Code Review Bot
+  description: Runs autonomous code review on staged Python files
+  entry: code-review-bot
+  language: python
+  types: [python]
+  args: ["--format=markdown"]

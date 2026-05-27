@@ -1,0 +1,40 @@
+# Byte-compiled
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
+# Traces (runtime data)
+traces/
+
+# Assets (reference PDFs)
+_assets/
+
+# Type checking
+.mypy_cache/
+.ty_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Distribution
+dist/
+build/
+*.egg

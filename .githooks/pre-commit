@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""
+Pre-commit hook — runs ruff lint/format, ty type check, secrets scan, and coverage.
+
+Install:  git config core.hooksPath .githooks
+Skip:     SKIP=lint,format,ty,secrets,coverage git commit
+"""
+
+import os
+import subprocess
+import sys
+
+HOOK_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_DIR = os.path.dirname(HOOK_DIR)
+SKIP = os.environ.get("SKIP", "").split(",")
+
+
+def get_staged_python_files() -> list[str]:
+    result = subprocess.run(
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+        capture_output=True, text=True, cwd=PROJECT_DIR,
+    )
+    files = [f for f in result.stdout.strip().split("\n") if f]
+    return [f for f in files if f.endswith(".py") and os.path.exists(f)]
+
+
+def run_ruff_lint() -> bool:
+    if "lint" in SKIP:
+        print("⏭️  SKIP=lint — skipping ruff lint")
+        return True
+
+    result = subprocess.run(
+        [sys.executable, "-m", "ruff", "check", "sentinel/", "tests/"],
+        capture_output=True, text=True, cwd=PROJECT_DIR,
+    )
+    if result.returncode != 0:
+        print("🔴 RUFF LINT FAILED:")
+        print(result.stdout.strip() or result.stderr.strip())
+        return False
+
+    print("✅ Ruff lint passed")
+    return True
+
+
+def run_ruff_format() -> bool:
+    if "format" in SKIP:
+        print("⏭️  SKIP=format — skipping ruff format")
+        return True
+
+    result = subprocess.run(
+        [sys.executable, "-m", "ruff", "format", "--check", "sentinel/", "tests/"],
+        capture_output=True, text=True, cwd=PROJECT_DIR,
+    )
+    if result.returncode != 0:
+        print("🔴 RUFF FORMAT FAILED:")
+        print(result.stdout.strip() or result.stderr.strip())
+        return False
+
+    print("✅ Ruff format passed")
+    return True
+
+
+def run_ty_check() -> bool:
+    if "ty" in SKIP:
+        print("⏭️  SKIP=ty — skipping type check")
+        return True
+
+    result = subprocess.run(
+        [sys.executable, "-m", "ty", "check", "sentinel/"],
+        capture_output=True, text=True, cwd=PROJECT_DIR,
+    )
+    if result.returncode != 0:
+        print("🔴 TY TYPE CHECK FAILED:")
+        print(result.stdout.strip() or result.stderr.strip())
+        return False
+
+    print("✅ Ty type check passed")
+    return True
+
+
+def run_secrets_scan(files: list[str]) -> bool:
+    if "secrets" in SKIP:
+        print("⏭️  SKIP=secrets — skipping secrets scan")
+        return True
+
+    if not files:
+        return True
+
+    result = subprocess.run(
+        [sys.executable, "-m", "sentinel.tools.secrets_scanner"]
+        + files
+        + ["--exit-zero"],
+        capture_output=True, text=True, cwd=PROJECT_DIR,
+    )
+    findings = result.stdout.strip()
+
+    if "No secrets detected" not in findings and findings:
+        print("🔴 SECRETS SCAN FAILED:")
+        print(findings)
+        return False
+
+    print("✅ Secrets scan passed")
+    return True
+
+
+def run_coverage_check(files: list[str]) -> bool:
+    if "coverage" in SKIP:
+        print("⏭️  SKIP=coverage — skipping coverage check")
+        return True
+
+    if not files:
+        return True
+
+    try:
+        import coverage
+    except ImportError:
+        print("⚠️  coverage not installed — skipping coverage check")
+        return True
+
+    subprocess.run(
+        [sys.executable, "-m", "coverage", "run", "-m", "unittest", "discover", "-s", "tests/", "-q"],
+        capture_output=True, text=True, cwd=PROJECT_DIR,
+    )
+
+    cov = coverage.Coverage()
+    cov.load()
+    total = cov.report(file=open(os.devnull, "w"))
+    cov.erase()
+
+    threshold = 85.0
+    if total < threshold:
+        print(f"🔴 Coverage check: {total:.1f}% (threshold: {threshold}%)")
+        print("   Run tests locally or add SKIP=coverage to bypass")
+        return False
+
+    print(f"✅ Coverage check: {total:.1f}% (threshold: {threshold}%)")
+    return True
+
+
+def main() -> int:
+    staged = get_staged_python_files()
+
+    if not run_ruff_lint():
+        return 1
+
+    if not run_ruff_format():
+        return 1
+
+    if not run_ty_check():
+        return 1
+
+    if staged:
+        print(f"🔍 Checking {len(staged)} staged file(s) for secrets")
+
+        if not run_secrets_scan(staged):
+            return 1
+
+        if not run_coverage_check(staged):
+            return 1
+    else:
+        print("✅ No staged Python files — skipping file-level checks")
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

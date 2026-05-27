@@ -1,0 +1,21 @@
+{
+    "exclude": [
+        "tests/",
+        "sentinel/test/",
+        "_assets/"
+    ],
+    "suppress": [
+        {"rule": "SEC003", "pattern": "**/context.py"},
+        {"rule": "SEC004", "pattern": "**/context.py"}
+    ],
+    "agents": {
+        "static-analysis": {
+            "complexity_threshold": 30,
+            "max_line_length": 120
+        }
+    },
+    "output": {
+        "format": "markdown",
+        "verbose": false
+    }
+}
