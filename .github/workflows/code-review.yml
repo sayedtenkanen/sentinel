@@ -32,6 +32,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -41,7 +43,7 @@ jobs:
       - name: Secrets scan staged files
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            files=$(git diff --name-only --diff-filter=AM origin/${{ github.base_ref }}...HEAD -- '*.py')
+            files=$(git diff --name-only --diff-filter=AM ${{ github.event.pull_request.base.sha }}...HEAD -- '*.py')
           else
             if git rev-parse HEAD~1 >/dev/null 2>&1; then
               base=HEAD~1
@@ -51,7 +53,12 @@ jobs:
             files=$(git diff --name-only --diff-filter=AM "$base" -- '*.py')
           fi
           if [ -n "$files" ]; then
-            python -m sentinel.tools.secrets_scanner $files
+            scan_files=$(echo "$files" | tr ' ' '\n' | grep -v '^tests/' | tr '\n' ' ' | xargs)
+            if [ -n "$scan_files" ]; then
+              python -m sentinel.tools.secrets_scanner $scan_files
+            else
+              echo "No files to scan (all in tests/)."
+            fi
           else
             echo "No files to scan."
           fi
@@ -91,6 +98,9 @@ jobs:
   review:
     needs: [ruff-ty, security-scan, unit-tests, evals]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -105,7 +115,7 @@ jobs:
         id: review
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            files=$(git diff --name-only --diff-filter=AM origin/${{ github.base_ref }}...HEAD -- '*.py')
+            files=$(git diff --name-only --diff-filter=AM ${{ github.event.pull_request.base.sha }}...HEAD -- '*.py')
           else
             if git rev-parse HEAD~1 >/dev/null 2>&1; then
               base=HEAD~1

@@ -16,6 +16,10 @@ from ..tools.config import agent_config, filter_files, load_config, suppress_fin
 
 
 def read_file(path: str) -> str:
+    """Read and return the contents of a file.
+
+    path: File path to read.
+    """
     with open(path) as f:
         return f.read()
 
@@ -23,6 +27,11 @@ def read_file(path: str) -> str:
 def collect_files(
     paths: list[str], exclude_patterns: list[str] | None = None
 ) -> list[tuple[str, str]]:
+    """Walk paths and return (filepath, content) pairs, filtering excludes.
+
+    paths: Files or directories to scan.
+    exclude_patterns: Optional glob patterns to exclude.
+    """
     files: list[tuple[str, str]] = []
     for path in paths:
         p = Path(path)
@@ -38,12 +47,13 @@ def collect_files(
 
 
 def create_parser() -> argparse.ArgumentParser:
+    """Build and return the CLI argument parser."""
     parser = argparse.ArgumentParser(
         description="Autonomous Code Review Bot — powered by sub-agents following the ADLC",
     )
     parser.add_argument(
         "paths",
-        nargs="+",
+        nargs="*",
         help="Files or directories to review",
     )
     parser.add_argument(
@@ -168,8 +178,15 @@ def _write_output(report, summary_text: str, args: argparse.Namespace, tracer: T
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Entry point: parse args, run review, write output.
+
+    argv: Optional CLI argument list (defaults to sys.argv).
+    """
     parser = create_parser()
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as e:
+        return e.code if isinstance(e.code, int) else 1
 
     if args.feedback:
         finding_id, trace_file = args.feedback

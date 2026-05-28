@@ -128,7 +128,12 @@ class DocumentationAgent(BaseAgent):
                 )
 
     def _check_docstring_params(self, findings: list[Finding], source: str, path: str) -> None:
-        """Check for docstring parameter documentation accuracy."""
+        """Check for docstring parameter documentation accuracy.
+
+        findings: List to append undocumented param findings to.
+        source: Source code to scan.
+        path: File path for finding attribution.
+        """
         try:
             tree = ast.parse(source)
             for node in ast.walk(tree):

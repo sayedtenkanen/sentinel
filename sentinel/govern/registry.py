@@ -63,7 +63,10 @@ class AgentRegistry:
         registry.register(
             AgentInfo(
                 name="static-analysis",
-                description="Cyclomatic complexity, line length, nesting depth, unused imports, trailing whitespace, blank lines, parameter count, shadowed builtins",
+                description=(
+                    "Cyclomatic complexity, line length, nesting depth, unused imports,"
+                    " trailing whitespace, blank lines, param count, shadowed builtins"
+                ),
                 version="1.0.0",
                 config_schema={
                     "complexity_threshold": {
@@ -99,7 +102,10 @@ class AgentRegistry:
         registry.register(
             AgentInfo(
                 name="security",
-                description="32 security patterns: eval, exec, pickle, SQLi, shell injection, hardcoded credentials, secrets, XSS, SSTI, and more",
+                description=(
+                    "32 security patterns: eval, exec, pickle, SQLi, shell injection,"
+                    " hardcoded creds, secrets, XSS, SSTI, and more"
+                ),
                 version="1.0.0",
                 config_schema={},
                 capabilities=["security", "vulnerability-scanning"],
@@ -109,7 +115,10 @@ class AgentRegistry:
         registry.register(
             AgentInfo(
                 name="style",
-                description="Import ordering, naming conventions (CapWords, snake_case), docstring presence, magic numbers, is vs == checks",
+                description=(
+                    "Import ordering, naming conventions (CapWords, snake_case),"
+                    " docstrings, magic numbers, is vs == checks"
+                ),
                 version="1.0.0",
                 config_schema={},
                 capabilities=["style", "conventions"],
@@ -119,7 +128,10 @@ class AgentRegistry:
         registry.register(
             AgentInfo(
                 name="best-practices",
-                description="Bare excepts, lambda assignments, mutable defaults, globals, type hints, context manager enforcement, type comparisons",
+                description=(
+                    "Bare excepts, lambda assigns, mutable defaults, globals, type hints,"
+                    " context manager enforcement, type comparisons"
+                ),
                 version="1.0.0",
                 config_schema={},
                 capabilities=["best-practices", "correctness"],

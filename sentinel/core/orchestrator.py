@@ -25,6 +25,8 @@ from .types import (
 
 
 class Orchestrator:
+    """Coordinates sub-agents, manages parallelism, tracing, and cost tracking."""
+
     def __init__(
         self,
         agents: list[BaseAgent] | None = None,
@@ -45,6 +47,10 @@ class Orchestrator:
         self.max_workers = max_workers
 
     def review(self, context: ReviewContext) -> ReviewReport:
+        """Run all agents on all files in the context.
+
+        context: ReviewContext with files and scope to review.
+        """
         start = time.perf_counter()
         report = ReviewReport(
             scope=context.scope,
@@ -59,16 +65,25 @@ class Orchestrator:
             )
         )
 
-        if self.max_workers and len(context.files) > 1:
-            with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
-                futures = {
-                    pool.submit(self._review_file, file, context): file for file in context.files
-                }
-                for future in as_completed(futures):
+        parallel = self.max_workers and self.max_workers > 1 and len(context.files) > 1
+
+        if parallel:
+            with (
+                ThreadPoolExecutor(max_workers=self.max_workers) as file_pool,
+                ThreadPoolExecutor(max_workers=self.max_workers) as agent_pool,
+            ):
+                futures = {}
+                for file in context.files:
                     if self.cost_tracker.cap_exceeded:
                         break
-                    file_result = future.result()
-                    report.agent_results.extend(file_result)
+                    futures[file_pool.submit(self._review_file, file, agent_pool)] = file
+
+                for future in as_completed(futures):
+                    file = futures[future]
+                    try:
+                        report.agent_results.extend(future.result())
+                    except Exception as e:
+                        self._trace_file_failed(file, str(e))
         else:
             for file in context.files:
                 if self.cost_tracker.cap_exceeded:
@@ -83,8 +98,11 @@ class Orchestrator:
                         )
                     )
                     break
-                file_result = self._review_file(file, context)
-                report.agent_results.extend(file_result)
+                try:
+                    file_result = self._review_file(file)
+                    report.agent_results.extend(file_result)
+                except Exception as e:
+                    self._trace_file_failed(file, str(e))
 
         report.duration_ms = (time.perf_counter() - start) * 1000
 
@@ -104,19 +122,49 @@ class Orchestrator:
 
         return report
 
-    def _review_file(self, file: FileContext, _context: ReviewContext) -> list[AgentResult]:
+    def _trace_file_failed(self, file: FileContext, error: str) -> None:
+        self.tracer.trace(
+            TraceEvent(
+                agent_name="orchestrator",
+                event="review.file_failed",
+                metadata={"file": file.path, "error": error},
+            )
+        )
+
+    def _review_file(
+        self, file: FileContext, agent_pool: ThreadPoolExecutor | None = None
+    ) -> list[AgentResult]:
         results: list[AgentResult] = []
 
-        if self.max_workers:
-            with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
-                agent_futures = {
-                    pool.submit(self._run_agent, agent, file): agent for agent in self.agents
-                }
-                for future in as_completed(agent_futures):
-                    results.append(future.result())
+        if agent_pool:
+            agent_futures = {
+                agent_pool.submit(self._run_agent, agent, file): (i, agent)
+                for i, agent in enumerate(self.agents)
+            }
+            by_index: dict[int, AgentResult] = {}
+            for future in as_completed(agent_futures):
+                i, agent = agent_futures[future]
+                try:
+                    by_index[i] = future.result()
+                except Exception as e:
+                    by_index[i] = AgentResult(
+                        agent_name=agent.name,
+                        status=AgentStatus.FAILED,
+                        error=str(e),
+                    )
+            results = [by_index[i] for i in range(len(self.agents))]
         else:
             for agent in self.agents:
-                results.append(self._run_agent(agent, file))
+                try:
+                    results.append(self._run_agent(agent, file))
+                except Exception as e:
+                    results.append(
+                        AgentResult(
+                            agent_name=agent.name,
+                            status=AgentStatus.FAILED,
+                            error=str(e),
+                        )
+                    )
 
         return results
 
@@ -146,9 +194,18 @@ class Orchestrator:
         return result
 
     def summarize(self, report: ReviewReport) -> str:
+        """Produce a human-readable summary string for the report.
+
+        report: ReviewReport to summarize.
+        """
         return self.summary_agent.summarize(report, self.cost_tracker.report.summary_line())
 
     def get_agent_report(self, name: str, report: ReviewReport) -> AgentResult | None:
+        """Look up an agent's results by name from the report.
+
+        name: Agent name to look up.
+        report: ReviewReport containing agent results.
+        """
         for result in report.agent_results:
             if result.agent_name == name:
                 return result

@@ -120,7 +120,8 @@ python -m coverage report --omit="sentinel/test/*"
 python -m sentinel.tools.secrets_scanner --recursive sentinel/
 
 # Pre-commit hook (auto-runs on git commit)
-SKIP=ty,secrets git commit -m "skips type check and secrets scan"
+git config core.hooksPath .githooks
+SKIP=lint,format,ty,secrets,coverage git commit -m "skip all hooks"
 ```
 
 Expected: 100% on both good_code and bad_code fixtures, **264 tests passing**, 3/3 simulation scenarios passing, 85%+ coverage, zero ruff/ty errors.

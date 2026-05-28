@@ -106,6 +106,62 @@ class TestTracerSummary(unittest.TestCase):
         self.assertEqual(summary["total_events"], 0)
         self.assertEqual(summary["total_metrics"], 0)
 
+    def test_summary_with_failed_events(self):
+        from sentinel.core.types import TraceEvent
+
+        tracer = Tracer(enabled=True)
+        tracer.trace(
+            TraceEvent(agent_name="agent1", event="run.failed", metadata={"error": "boom"})
+        )
+        summary = tracer.summary()
+        self.assertIn("errors", summary)
+        self.assertEqual(len(summary["errors"]), 1)
+        self.assertIn("boom", summary["errors"][0])
+
+    def test_metric_disabled(self):
+        tracer = Tracer(enabled=False)
+        tracer.metric("test", 1.0)
+        self.assertEqual(len(tracer.get_metrics()), 0)
+
+    def test_export_feedback_no_dir(self):
+        tracer = Tracer(enabled=True, feedback_dir=None)
+        fb = Feedback(finding_id="test")
+        tracer.store_feedback(fb)
+        path = tracer.export_feedback("trace.json")
+        self.assertIsNone(path)
+
+    def test_flush_no_log_dir(self):
+        tracer = Tracer(enabled=True, log_dir=None)
+        tracer.flush()
+
+    def test_metric_enabled(self):
+        tracer = Tracer(enabled=True)
+        tracer.metric("latency", 42.0, {"agent": "style"})
+        metrics = tracer.get_metrics()
+        self.assertEqual(len(metrics), 1)
+        self.assertEqual(metrics[0].name, "latency")
+        self.assertEqual(metrics[0].value, 42.0)
+
+    def test_flush_with_log_dir_writes_trace_files(self):
+        with tempfile.TemporaryDirectory() as log_dir:
+            tracer = Tracer(enabled=True, log_dir=log_dir)
+            tracer.metric("latency", 10.0, {"agent": "unit-test"})
+            tracer.flush()
+            files = os.listdir(log_dir)
+            self.assertGreater(len(files), 0)
+            for filename in files:
+                path = os.path.join(log_dir, filename)
+                self.assertTrue(os.path.isfile(path))
+
+    def test_export_feedback_with_dir(self):
+        with tempfile.TemporaryDirectory() as feedback_dir:
+            tracer = Tracer(enabled=True, feedback_dir=feedback_dir)
+            fb = Feedback(finding_id="test")
+            tracer.store_feedback(fb)
+            path = tracer.export_feedback("trace.json")
+            self.assertIsNotNone(path)
+            self.assertTrue(os.path.isfile(path))
+
 
 if __name__ == "__main__":
     unittest.main()

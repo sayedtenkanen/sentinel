@@ -33,6 +33,12 @@ STDLIB_MODULES = {
     "argparse",
     "subprocess",
     "tempfile",
+    "threading",
+    "io",
+    "time",
+    "ast",
+    "concurrent",
+    "http",
 }
 
 

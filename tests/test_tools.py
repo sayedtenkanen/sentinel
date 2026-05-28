@@ -133,6 +133,23 @@ class TestParseDiff(unittest.TestCase):
         files = parse_diff("")
         self.assertEqual(len(files), 0)
 
+    def test_parse_multi_file_diff(self):
+        diff = """--- a/file1.py
++++ b/file1.py
+@@ -1 +1,2 @@
+-old
++new
+--- a/file2.py
++++ b/file2.py
+@@ -1 +1 @@
+-old
++new
+"""
+        files = parse_diff(diff)
+        self.assertEqual(len(files), 2)
+        self.assertEqual(files[0]["path"], "file1.py")
+        self.assertEqual(files[1]["path"], "file2.py")
+
 
 class TestConfig(unittest.TestCase):
     def setUp(self):
