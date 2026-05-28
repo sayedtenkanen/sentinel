@@ -183,7 +183,10 @@ def main(argv: list[str] | None = None) -> int:
     argv: Optional CLI argument list (defaults to sys.argv).
     """
     parser = create_parser()
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as e:
+        return e.code if isinstance(e.code, int) else 1
 
     if args.feedback:
         finding_id, trace_file = args.feedback

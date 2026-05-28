@@ -142,6 +142,26 @@ class TestTracerSummary(unittest.TestCase):
         self.assertEqual(metrics[0].name, "latency")
         self.assertEqual(metrics[0].value, 42.0)
 
+    def test_flush_with_log_dir_writes_trace_files(self):
+        with tempfile.TemporaryDirectory() as log_dir:
+            tracer = Tracer(enabled=True, log_dir=log_dir)
+            tracer.metric("latency", 10.0, {"agent": "unit-test"})
+            tracer.flush()
+            files = os.listdir(log_dir)
+            self.assertGreater(len(files), 0)
+            for filename in files:
+                path = os.path.join(log_dir, filename)
+                self.assertTrue(os.path.isfile(path))
+
+    def test_export_feedback_with_dir(self):
+        with tempfile.TemporaryDirectory() as feedback_dir:
+            tracer = Tracer(enabled=True, feedback_dir=feedback_dir)
+            fb = Feedback(finding_id="test")
+            tracer.store_feedback(fb)
+            path = tracer.export_feedback("trace.json")
+            self.assertIsNotNone(path)
+            self.assertTrue(os.path.isfile(path))
+
 
 if __name__ == "__main__":
     unittest.main()

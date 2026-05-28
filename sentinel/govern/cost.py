@@ -123,7 +123,7 @@ class CostTracker:
         with self._lock:
             if self.cost_cap is None:
                 return False
-            return self.total_cost > self.cost_cap
+            return self._report.total_cost > self.cost_cap
 
     def track(
         self, agent_name: str, duration_ms: float, rate_per_ms: float | None = None

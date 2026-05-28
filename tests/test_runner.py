@@ -146,9 +146,13 @@ class TestRunnerMain(unittest.TestCase):
             f.write("x = 1\n")
             path = f.name
         try:
-            with contextlib.redirect_stderr(io.StringIO()):
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
                 exit_code = main([path, "-v"])
             self.assertEqual(exit_code, 0)
+            output = stderr.getvalue()
+            self.assertIn("Reviewing", output)
+            self.assertIn("Trace Summary", output)
         finally:
             os.unlink(path)
 
@@ -158,10 +162,14 @@ class TestRunnerMain(unittest.TestCase):
             src = f.name
         out_path = src + ".out.md"
         try:
-            with contextlib.redirect_stderr(io.StringIO()):
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
                 exit_code = main([src, "-v", "-o", out_path])
             self.assertEqual(exit_code, 0)
             self.assertTrue(os.path.exists(out_path))
+            output = stderr.getvalue()
+            self.assertIn("Report written", output)
+            self.assertIn(os.path.basename(out_path), output)
         finally:
             os.unlink(src)
             if os.path.exists(out_path):
@@ -173,18 +181,22 @@ class TestRunnerMain(unittest.TestCase):
             src = f.name
         with tempfile.TemporaryDirectory() as trace_dir:
             try:
-                with contextlib.redirect_stderr(io.StringIO()):
+                stderr = io.StringIO()
+                with contextlib.redirect_stderr(stderr):
                     exit_code = main([src, "-v", "--trace-dir", trace_dir])
                 self.assertEqual(exit_code, 0)
                 self.assertGreater(len(os.listdir(trace_dir)), 0)
+                output = stderr.getvalue()
+                self.assertIn("Traces saved", output)
             finally:
                 os.unlink(src)
 
     def test_main_with_feedback(self):
         with tempfile.TemporaryDirectory() as tmpdir:
+            stdout = io.StringIO()
             with (
                 contextlib.redirect_stderr(io.StringIO()),
-                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stdout(stdout),
             ):
                 exit_code = main(
                     [
@@ -202,6 +214,55 @@ class TestRunnerMain(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             feedback_files = [f for f in os.listdir(tmpdir) if f.startswith("feedback_")]
             self.assertGreater(len(feedback_files), 0)
+            self.assertIn("Feedback saved", stdout.getvalue())
+
+    def test_main_no_paths(self):
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            exit_code = main([])
+        self.assertEqual(exit_code, 1)
+        self.assertIn("no files found", stderr.getvalue())
+
+    def test_main_with_feedback_missing_rating(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            stdout = io.StringIO()
+            with (
+                contextlib.redirect_stderr(io.StringIO()),
+                contextlib.redirect_stdout(stdout),
+            ):
+                exit_code = main(
+                    [
+                        "--feedback",
+                        "finding123",
+                        "trace_001.json",
+                        "--comment",
+                        "no rating",
+                        "--trace-dir",
+                        tmpdir,
+                    ]
+                )
+            self.assertEqual(exit_code, 0)
+            self.assertIn("Feedback saved", stdout.getvalue())
+
+    def test_main_with_feedback_invalid_rating(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            stderr = io.StringIO()
+            with (
+                contextlib.redirect_stderr(stderr),
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                exit_code = main(
+                    [
+                        "--feedback",
+                        "finding123",
+                        "trace_001.json",
+                        "--rating",
+                        "not-a-valid-rating",
+                        "--trace-dir",
+                        tmpdir,
+                    ]
+                )
+            self.assertNotEqual(exit_code, 0)
 
 
 if __name__ == "__main__":

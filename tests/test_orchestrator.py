@@ -125,6 +125,14 @@ eval("os.system('ls')")
         report = orch.review(ctx)
         self.assertIsNotNone(report)
 
+    def test_parallel_agent_ordering(self):
+        orch = Orchestrator(max_workers=4)
+        ctx = ReviewContext.from_file("test.py", "x = 1")
+        report = orch.review(ctx)
+        names = [r.agent_name for r in report.agent_results]
+        expected = ["static-analysis", "security", "style", "best-practices", "documentation"]
+        self.assertEqual(names, expected)
+
 
 if __name__ == "__main__":
     unittest.main()

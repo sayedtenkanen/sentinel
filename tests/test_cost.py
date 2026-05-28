@@ -109,6 +109,35 @@ class TestCostTracker(unittest.TestCase):
         self.assertIn("documentation", DEFAULT_COST_RATES)
         self.assertEqual(len(DEFAULT_COST_RATES), 5)
 
+    def test_report_snapshot_isolation(self):
+        t = CostTracker()
+        t.track("agent", 100.0, 0.001)
+        snap = t.report
+        self.assertEqual(len(snap.entries), 1)
+        t.track("agent2", 50.0, 0.001)
+        self.assertEqual(len(snap.entries), 1)
+
+    def test_concurrent_tracking(self):
+        import threading
+
+        t = CostTracker()
+        errors = []
+
+        def track_worker(name):
+            try:
+                for _ in range(10):
+                    t.track(name, 1.0, 0.001)
+            except Exception as e:
+                errors.append(str(e))
+
+        threads = [threading.Thread(target=track_worker, args=(f"agent-{i}",)) for i in range(4)]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join()
+        self.assertEqual(len(errors), 0)
+        self.assertAlmostEqual(t.total_cost, 40 * 0.001, places=6)
+
 
 if __name__ == "__main__":
     unittest.main()

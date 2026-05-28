@@ -141,18 +141,18 @@ class Orchestrator:
                 agent_pool.submit(self._run_agent, agent, file): (i, agent)
                 for i, agent in enumerate(self.agents)
             }
-            sorted_futures = sorted(agent_futures.items(), key=lambda x: x[1][0])
-            for future, (_idx, agent) in sorted_futures:
+            by_index: dict[int, AgentResult] = {}
+            for future in as_completed(agent_futures):
+                i, agent = agent_futures[future]
                 try:
-                    results.append(future.result())
+                    by_index[i] = future.result()
                 except Exception as e:
-                    results.append(
-                        AgentResult(
-                            agent_name=agent.name,
-                            status=AgentStatus.FAILED,
-                            error=str(e),
-                        )
+                    by_index[i] = AgentResult(
+                        agent_name=agent.name,
+                        status=AgentStatus.FAILED,
+                        error=str(e),
                     )
+            results = [by_index[i] for i in range(len(self.agents))]
         else:
             for agent in self.agents:
                 try:
