@@ -100,6 +100,13 @@ def create_parser() -> argparse.ArgumentParser:
         help="Optional comment for feedback",
     )
     parser.add_argument(
+        "--workers",
+        "-w",
+        type=int,
+        default=None,
+        help="Parallel agent workers (default: sequential, recommended: 4-8)",
+    )
+    parser.add_argument(
         "--cost-cap",
         type=float,
         help="Maximum cost cap (in dollars) before review is halted",
@@ -176,7 +183,9 @@ def main(argv: list[str] | None = None) -> int:
     tracer = Tracer(log_dir=args.trace_dir, enabled=True)
     cost_tracker = CostTracker(cost_cap=args.cost_cap)
     agents = _setup_agents(cfg, set(args.disable_agent or []))
-    orchestrator = Orchestrator(agents=agents, tracer=tracer, cost_tracker=cost_tracker)
+    orchestrator = Orchestrator(
+        agents=agents, tracer=tracer, cost_tracker=cost_tracker, max_workers=args.workers
+    )
 
     files = collect_files(args.paths, exclude_patterns)
     if not files:

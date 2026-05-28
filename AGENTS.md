@@ -71,6 +71,9 @@ python -m sentinel.deploy.runner path/to/file.py -v --trace-dir ./traces
 # With cost cap (in dollars)
 python -m sentinel.deploy.runner path/to/file.py --cost-cap 0.05
 
+# Parallel agent processing
+python -m sentinel.deploy.runner path/to/dir/ --workers 4
+
 # Write to file
 python -m sentinel.deploy.runner path/to/file.py -o report.md
 
@@ -144,3 +147,4 @@ Expected: 100% on both good_code and bad_code fixtures, **264 tests passing**, 3
 - **Agent Registry** provides a static `default()` with all built-in agents and their config schemas.
 - **Eval datasets mirror production** — good_code and bad_code fixtures serve as regression dataset per the ADLC article: *"Datasets are how teams preserve what they learn."*
 - **Suppress rules** support fnmatch wildcards on both `rule` and `pattern` fields in `.code-review.json`.
+- **Parallel processing** — `--workers N` runs agents concurrently via `ThreadPoolExecutor`. Agents are stateless and thread-safe. Falls back to sequential when `max_workers` is `None`. Best suited when agents perform I/O or release the GIL (regex/AST parsing).

@@ -10,6 +10,9 @@ Zero external dependencies. Pure Python stdlib.
 # Review a file
 python -m sentinel.deploy.runner path/to/file.py
 
+# Review a directory in parallel (agents run concurrently per file)
+python -m sentinel.deploy.runner path/to/dir/ --workers 4
+
 # Review a directory
 python -m sentinel.deploy.runner path/to/dir/
 

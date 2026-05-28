@@ -96,6 +96,35 @@ eval("os.system('ls')")
         report = orch.review(ctx)
         self.assertGreaterEqual(report.score, 70)
 
+    def test_parallel_agents_sequential_by_default(self):
+        orch = Orchestrator()
+        self.assertIsNone(orch.max_workers)
+
+    def test_parallel_agents_returns_same_findings(self):
+        seq = Orchestrator()
+        par = Orchestrator(max_workers=4)
+        ctx = ReviewContext.from_file("test.py", "x = eval('hi')\ny = 1")
+        seq_report = seq.review(ctx)
+        par_report = par.review(ctx)
+        self.assertEqual(len(seq_report.all_findings), len(par_report.all_findings))
+
+    def test_parallel_multiple_files(self):
+        orch = Orchestrator(max_workers=4)
+        files = [
+            FileContext(path="a.py", content="x = 1"),
+            FileContext(path="b.py", content='password = "secret"'),
+        ]
+        ctx = ReviewContext(files=files)
+        report = orch.review(ctx)
+        self.assertEqual(len(report.files_reviewed), 2)
+        self.assertGreater(len(report.all_findings), 0)
+
+    def test_parallel_single_file_fallback(self):
+        orch = Orchestrator(max_workers=4)
+        ctx = ReviewContext.from_file("single.py", "x = 1")
+        report = orch.review(ctx)
+        self.assertIsNotNone(report)
+
 
 if __name__ == "__main__":
     unittest.main()
