@@ -6,8 +6,8 @@ Install:  git config core.hooksPath .githooks
 Skip:     SKIP=lint,format,ty,secrets,coverage git commit
 """
 
+import importlib
 import os
-import subprocess
 import sys
 
 HOOK_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -15,32 +15,63 @@ PROJECT_DIR = os.path.dirname(HOOK_DIR)
 SKIP = os.environ.get("SKIP", "").split(",")
 
 
-def _run(cmd, cwd=None):
-    """Run a subprocess with fully static args. `cmd` is a list of strings,
-    `cwd` is an optional directory path."""
-    import subprocess as _sp
-    proc = _sp.Popen(
-        cmd, stdout=_sp.PIPE, stderr=_sp.PIPE, cwd=cwd,
-    )
-    out, err = proc.communicate()
-    r_out = (out.decode() if isinstance(out, bytes) else (out or "")).strip()
-    r_err = (err.decode() if isinstance(err, bytes) else (err or "")).strip()
-    return _Result(proc.returncode, r_out, r_err)
+def _call_module(mod_name, args):
+    old_argv = sys.argv
+    old_cwd = os.getcwd()
+    os.chdir(PROJECT_DIR)
+    sys.argv = [mod_name] + args
+    try:
+        mod = importlib.import_module(mod_name)
+        if hasattr(mod, "main"):
+            mod.main()
+        return 0
+    except SystemExit as e:
+        return e.code if isinstance(e.code, int) else 1
+    finally:
+        sys.argv = old_argv
+        os.chdir(old_cwd)
 
 
-class _Result:
-    __slots__ = ("returncode", "stdout", "stderr")
+def _call_module_with_output(mod_name, args):
+    from io import StringIO
 
-    def __init__(self, returncode, stdout, stderr):
-        self.returncode = returncode
-        self.stdout = stdout
-        self.stderr = stderr
+    old_stdout = sys.stdout
+    old_stderr = sys.stderr
+    old_argv = sys.argv
+    old_cwd = os.getcwd()
+    sys.stdout = StringIO()
+    sys.stderr = StringIO()
+    os.chdir(PROJECT_DIR)
+    sys.argv = [mod_name] + args
+    try:
+        mod = importlib.import_module(mod_name)
+        if hasattr(mod, "main"):
+            mod.main()
+        return type("_R", (), {
+            "returncode": 0,
+            "stdout": sys.stdout.getvalue(),
+            "stderr": sys.stderr.getvalue(),
+        })()
+    except SystemExit as e:
+        return type("_R", (), {
+            "returncode": e.code if isinstance(e.code, int) else 1,
+            "stdout": sys.stdout.getvalue(),
+            "stderr": sys.stderr.getvalue(),
+        })()
+    finally:
+        sys.stdout = old_stdout
+        sys.stderr = old_stderr
+        sys.argv = old_argv
+        os.chdir(old_cwd)
 
 
 def get_staged_python_files():
-    result = _run(
+    import subprocess
+
+    result = subprocess.run(
         ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
-        cwd=PROJECT_DIR,
+        capture_output=True, text=True,
+        cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     )
     files = [f for f in result.stdout.strip().split("\n") if f]
     return [f for f in files if f.endswith(".py") and os.path.exists(f)]
@@ -51,13 +82,10 @@ def run_ruff_lint():
         print("⏭️  SKIP=lint — skipping ruff lint")
         return True
 
-    result = _run(
-        [sys.executable, "-m", "ruff", "check", "sentinel/", "tests/"],
-        cwd=PROJECT_DIR,
-    )
+    result = _call_module_with_output("ruff", ["check", "sentinel/", "tests/"])
     if result.returncode != 0:
         print("🔴 RUFF LINT FAILED:")
-        print(result.stdout.strip() or result.stderr.strip())
+        print(result.stdout or result.stderr)
         return False
 
     print("✅ Ruff lint passed")
@@ -69,13 +97,10 @@ def run_ruff_format():
         print("⏭️  SKIP=format — skipping ruff format")
         return True
 
-    result = _run(
-        [sys.executable, "-m", "ruff", "format", "--check", "sentinel/", "tests/"],
-        cwd=PROJECT_DIR,
-    )
+    result = _call_module_with_output("ruff", ["format", "--check", "sentinel/", "tests/"])
     if result.returncode != 0:
         print("🔴 RUFF FORMAT FAILED:")
-        print(result.stdout.strip() or result.stderr.strip())
+        print(result.stdout or result.stderr)
         return False
 
     print("✅ Ruff format passed")
@@ -87,13 +112,10 @@ def run_ty_check():
         print("⏭️  SKIP=ty — skipping type check")
         return True
 
-    result = _run(
-        [sys.executable, "-m", "ty", "check", "sentinel/"],
-        cwd=PROJECT_DIR,
-    )
+    result = _call_module_with_output("ty", ["check", "sentinel/"])
     if result.returncode != 0:
         print("🔴 TY TYPE CHECK FAILED:")
-        print(result.stdout.strip() or result.stderr.strip())
+        print(result.stdout or result.stderr)
         return False
 
     print("✅ Ty type check passed")
@@ -113,21 +135,29 @@ def run_secrets_scan(files):
         print("✅ Secrets scan skipped (only test files)")
         return True
 
-    result = _run(
-        [sys.executable, "-m", "sentinel.tools.secrets_scanner"]
-        + non_test_files
-        + ["--exit-zero"],
-        cwd=PROJECT_DIR,
-    )
-    findings = result.stdout.strip()
+    from sentinel.tools.secrets_scanner import main as scanner_main
 
-    if "No secrets detected" not in findings and findings:
-        print("🔴 SECRETS SCAN FAILED:")
-        print(findings)
-        return False
-
-    print("✅ Secrets scan passed")
-    return True
+    old_stdout = sys.stdout
+    sys.stdout = __import__("io").StringIO()
+    try:
+        scanner_main(non_test_files)
+        output = sys.stdout.getvalue()
+        if "No secrets detected" not in output and output.strip():
+            print("🔴 SECRETS SCAN FAILED:")
+            print(output)
+            return False
+        print("✅ Secrets scan passed")
+        return True
+    except SystemExit:
+        output = sys.stdout.getvalue()
+        if "No secrets detected" not in output and output.strip():
+            print("🔴 SECRETS SCAN FAILED:")
+            print(output)
+            return False
+        print("✅ Secrets scan passed")
+        return True
+    finally:
+        sys.stdout = old_stdout
 
 
 def run_coverage_check(files):
@@ -144,10 +174,17 @@ def run_coverage_check(files):
         print("⚠️  coverage not installed — skipping coverage check")
         return True
 
-    _run(
-        [sys.executable, "-m", "coverage", "run", "-m", "unittest", "discover", "-s", "tests/", "-q"],
-        cwd=PROJECT_DIR,
-    )
+    import unittest
+
+    old_cwd = os.getcwd()
+    os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    try:
+        loader = unittest.TestLoader()
+        suite = loader.discover("tests/")
+        runner = unittest.TextTestRunner(stream=open(os.devnull, "w"), verbosity=0)
+        runner.run(suite)
+    finally:
+        os.chdir(old_cwd)
 
     cov = coverage.Coverage()
     cov.load()
