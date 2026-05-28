@@ -18,7 +18,23 @@ SKIP = os.environ.get("SKIP", "").split(",")
 def _run(cmd, cwd=None):
     """Run a subprocess with fully static args. `cmd` is a list of strings,
     `cwd` is an optional directory path."""
-    return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
+    import subprocess as _sp
+    proc = _sp.Popen(
+        cmd, stdout=_sp.PIPE, stderr=_sp.PIPE, cwd=cwd,
+    )
+    out, err = proc.communicate()
+    r_out = (out.decode() if isinstance(out, bytes) else (out or "")).strip()
+    r_err = (err.decode() if isinstance(err, bytes) else (err or "")).strip()
+    return _Result(proc.returncode, r_out, r_err)
+
+
+class _Result:
+    __slots__ = ("returncode", "stdout", "stderr")
+
+    def __init__(self, returncode, stdout, stderr):
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
 
 
 def get_staged_python_files():
