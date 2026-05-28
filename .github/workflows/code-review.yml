@@ -43,7 +43,11 @@ jobs:
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             files=$(git diff --name-only --diff-filter=AM origin/${{ github.base_ref }}...HEAD -- '*.py')
           else
-            base=$(git rev-parse HEAD~1 2>/dev/null || git rev-list --max-parents=0 HEAD)
+            if git rev-parse HEAD~1 >/dev/null 2>&1; then
+              base=HEAD~1
+            else
+              base=$(git rev-list --max-parents=0 HEAD)
+            fi
             files=$(git diff --name-only --diff-filter=AM "$base" -- '*.py')
           fi
           if [ -n "$files" ]; then
@@ -103,7 +107,11 @@ jobs:
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             files=$(git diff --name-only --diff-filter=AM origin/${{ github.base_ref }}...HEAD -- '*.py')
           else
-            base=$(git rev-parse HEAD~1 2>/dev/null || git rev-list --max-parents=0 HEAD)
+            if git rev-parse HEAD~1 >/dev/null 2>&1; then
+              base=HEAD~1
+            else
+              base=$(git rev-list --max-parents=0 HEAD)
+            fi
             files=$(git diff --name-only --diff-filter=AM "$base" -- '*.py')
           fi
           if [ -z "$files" ]; then
