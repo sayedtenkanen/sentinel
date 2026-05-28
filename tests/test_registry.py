@@ -84,7 +84,7 @@ class TestAgentRegistry(unittest.TestCase):
 
     def test_default_registry(self):
         registry = AgentRegistry.default()
-        self.assertEqual(len(registry.list_agents()), 6)
+        self.assertEqual(len(registry.list_agents()), 7)
         self.assertIsNotNone(registry.get("static-analysis"))
         self.assertIsNotNone(registry.get("security"))
         self.assertIsNotNone(registry.get("style"))

@@ -158,4 +158,26 @@ class AgentRegistry:
                 tags=["core", "reporting"],
             )
         )
+        registry.register(
+            AgentInfo(
+                name="llm-review",
+                description="Optional LLM-powered review with RAG context retrieval",
+                version="1.0.0",
+                config_schema={
+                    "api_key": {"type": "string", "default": "", "description": "OpenAI API key"},
+                    "model": {
+                        "type": "string",
+                        "default": "gpt-4o-mini",
+                        "description": "Model name",
+                    },
+                    "rag_top_k": {
+                        "type": "int",
+                        "default": 3,
+                        "description": "RAG results to retrieve",
+                    },
+                },
+                capabilities=["llm", "rag", "ai-review"],
+                tags=["optional", "llm"],
+            )
+        )
         return registry
