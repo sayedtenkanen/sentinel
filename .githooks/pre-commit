@@ -7,7 +7,6 @@ Skip:     SKIP=lint,format,ty,secrets,coverage git commit
 """
 
 import os
-import shlex
 import subprocess
 import sys
 
@@ -16,23 +15,29 @@ PROJECT_DIR = os.path.dirname(HOOK_DIR)
 SKIP = os.environ.get("SKIP", "").split(",")
 
 
-def get_staged_python_files() -> list[str]:
-    result = subprocess.run(
+def _run(cmd, cwd=None):
+    """Run a subprocess with fully static args. `cmd` is a list of strings,
+    `cwd` is an optional directory path."""
+    return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
+
+
+def get_staged_python_files():
+    result = _run(
         ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
-        capture_output=True, text=True, cwd=PROJECT_DIR,
+        cwd=PROJECT_DIR,
     )
     files = [f for f in result.stdout.strip().split("\n") if f]
     return [f for f in files if f.endswith(".py") and os.path.exists(f)]
 
 
-def run_ruff_lint() -> bool:
+def run_ruff_lint():
     if "lint" in SKIP:
         print("⏭️  SKIP=lint — skipping ruff lint")
         return True
 
-    result = subprocess.run(
+    result = _run(
         [sys.executable, "-m", "ruff", "check", "sentinel/", "tests/"],
-        capture_output=True, text=True, cwd=PROJECT_DIR,
+        cwd=PROJECT_DIR,
     )
     if result.returncode != 0:
         print("🔴 RUFF LINT FAILED:")
@@ -43,14 +48,14 @@ def run_ruff_lint() -> bool:
     return True
 
 
-def run_ruff_format() -> bool:
+def run_ruff_format():
     if "format" in SKIP:
         print("⏭️  SKIP=format — skipping ruff format")
         return True
 
-    result = subprocess.run(
+    result = _run(
         [sys.executable, "-m", "ruff", "format", "--check", "sentinel/", "tests/"],
-        capture_output=True, text=True, cwd=PROJECT_DIR,
+        cwd=PROJECT_DIR,
     )
     if result.returncode != 0:
         print("🔴 RUFF FORMAT FAILED:")
@@ -61,14 +66,14 @@ def run_ruff_format() -> bool:
     return True
 
 
-def run_ty_check() -> bool:
+def run_ty_check():
     if "ty" in SKIP:
         print("⏭️  SKIP=ty — skipping type check")
         return True
 
-    result = subprocess.run(
+    result = _run(
         [sys.executable, "-m", "ty", "check", "sentinel/"],
-        capture_output=True, text=True, cwd=PROJECT_DIR,
+        cwd=PROJECT_DIR,
     )
     if result.returncode != 0:
         print("🔴 TY TYPE CHECK FAILED:")
@@ -79,7 +84,7 @@ def run_ty_check() -> bool:
     return True
 
 
-def run_secrets_scan(files: list[str]) -> bool:
+def run_secrets_scan(files):
     if "secrets" in SKIP:
         print("⏭️  SKIP=secrets — skipping secrets scan")
         return True
@@ -92,11 +97,11 @@ def run_secrets_scan(files: list[str]) -> bool:
         print("✅ Secrets scan skipped (only test files)")
         return True
 
-    result = subprocess.run(
+    result = _run(
         [sys.executable, "-m", "sentinel.tools.secrets_scanner"]
-        + [shlex.escape(f) for f in non_test_files]
+        + non_test_files
         + ["--exit-zero"],
-        capture_output=True, text=True, cwd=PROJECT_DIR,
+        cwd=PROJECT_DIR,
     )
     findings = result.stdout.strip()
 
@@ -109,7 +114,7 @@ def run_secrets_scan(files: list[str]) -> bool:
     return True
 
 
-def run_coverage_check(files: list[str]) -> bool:
+def run_coverage_check(files):
     if "coverage" in SKIP:
         print("⏭️  SKIP=coverage — skipping coverage check")
         return True
@@ -123,9 +128,9 @@ def run_coverage_check(files: list[str]) -> bool:
         print("⚠️  coverage not installed — skipping coverage check")
         return True
 
-    subprocess.run(
+    _run(
         [sys.executable, "-m", "coverage", "run", "-m", "unittest", "discover", "-s", "tests/", "-q"],
-        capture_output=True, text=True, cwd=PROJECT_DIR,
+        cwd=PROJECT_DIR,
     )
 
     cov = coverage.Coverage()
@@ -143,7 +148,7 @@ def run_coverage_check(files: list[str]) -> bool:
     return True
 
 
-def main() -> int:
+def main():
     staged = get_staged_python_files()
 
     if not run_ruff_lint():
