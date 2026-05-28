@@ -13,9 +13,6 @@ python -m sentinel.deploy.runner path/to/file.py
 # Review a directory in parallel (agents run concurrently per file)
 python -m sentinel.deploy.runner path/to/dir/ --workers 4
 
-# Review a directory
-python -m sentinel.deploy.runner path/to/dir/
-
 # JSON output
 python -m sentinel.deploy.runner file.py --format json
 
@@ -33,6 +30,75 @@ python -m sentinel.monitor.dashboard --trace-dir ./traces --port 8080
 
 # Run simulation engine (Test phase)
 python -m sentinel.test.simulations
+```
+
+## Data Flow
+
+```
+                                ┌─────────────┐
+                                │  CLI / User  │
+                                └──────┬──────┘
+                                       │ paths, flags
+                                       v
+                                ┌──────────────┐
+                                │   runner.py   │
+                                │   load_config │
+                                └──────┬───────┘
+                                       │ FileContext[]
+                                       v
+              ┌───────────────────────────────────────────┐
+              │              Orchestrator                  │
+              │                                            │
+              │  ┌──────────────┐    ┌──────────────────┐  │
+              │  │  CostTracker  │    │     Tracer       │  │
+              │  │  (per-agent)  │    │  (events+metrics)│  │
+              │  └──────┬───────┘    └────────┬─────────┘  │
+              │         │                     │            │
+              │         v                     v            │
+              │  ┌────────────────────────────────────┐    │
+              │  │       ThreadPoolExecutor            │    │
+              │  │  ┌────────┐┌──────┐┌─────┐┌─────┐  │    │
+              │  │  │static- ││secu- ││style││best-│ ...│    │
+              │  │  │analysis││rity  ││     ││prac │  │    │
+              │  │  └───┬────┘└──┬───┘└──┬──┘└──┬──┘  │    │
+              │  └──────┼────────┼───────┼──────┼──────┘    │
+              │         │        │       │      │           │
+              │         v        v       v      v           │
+              │         Finding[] (per agent)               │
+              │                                            │
+              └───────────────────────┬────────────────────┘
+                                      │ AgentResult[]
+                                      v
+                            ┌──────────────────┐
+                            │    SummaryAgent   │
+                            │  (score + verdict)│
+                            └────────┬─────────┘
+                                     │
+                   ┌─────────────────┼─────────────────┐
+                   │                 │                  │
+                   v                 v                  v
+            ┌──────────┐    ┌──────────────┐   ┌──────────────┐
+            │  Report   │    │   Tracer     │   │  CostTracker  │
+            │ (JSON/MD) │    │ (trace files)│   │  (cost line)  │
+            └──────────┘    └──────┬───────┘   └──────────────┘
+                                   │
+                                   v
+                          ┌────────────────────┐
+                          │  feedback_trace_*.json
+                          │  (POST /api/feedback)│
+                          └────────┬───────────┘
+                                   │
+                                   v
+                          ┌────────────────────┐
+                          │  Dashboard (HTML)  │
+                          │  /api/stats        │
+                          │  /api/traces       │
+                          │  /api/feedback     │
+                          └────────────────────┘
+
+► External inputs:  CLI args, --config .code-review.json, --feedback
+► Storage:         trace_*.json, feedback_trace_*.json, .sentinel-profiles/
+► Outputs:         stdout (MD/JSON), dashboard (HTTP), trace files
 ```
 
 ## Agents
