@@ -25,6 +25,8 @@ from .types import (
 
 
 class Orchestrator:
+    """Coordinates sub-agents, manages parallelism, tracing, and cost tracking."""
+
     def __init__(
         self,
         agents: list[BaseAgent] | None = None,
@@ -45,6 +47,10 @@ class Orchestrator:
         self.max_workers = max_workers
 
     def review(self, context: ReviewContext) -> ReviewReport:
+        """Run all agents on all files in the context.
+
+        context: ReviewContext with files and scope to review.
+        """
         start = time.perf_counter()
         report = ReviewReport(
             scope=context.scope,
@@ -188,9 +194,18 @@ class Orchestrator:
         return result
 
     def summarize(self, report: ReviewReport) -> str:
+        """Produce a human-readable summary string for the report.
+
+        report: ReviewReport to summarize.
+        """
         return self.summary_agent.summarize(report, self.cost_tracker.report.summary_line())
 
     def get_agent_report(self, name: str, report: ReviewReport) -> AgentResult | None:
+        """Look up an agent's results by name from the report.
+
+        name: Agent name to look up.
+        report: ReviewReport containing agent results.
+        """
         for result in report.agent_results:
             if result.agent_name == name:
                 return result
