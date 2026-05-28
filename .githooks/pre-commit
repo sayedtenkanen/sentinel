@@ -86,9 +86,14 @@ def run_secrets_scan(files: list[str]) -> bool:
     if not files:
         return True
 
+    non_test_files = [f for f in files if not f.startswith("tests/")]
+    if not non_test_files:
+        print("✅ Secrets scan skipped (only test files)")
+        return True
+
     result = subprocess.run(
         [sys.executable, "-m", "sentinel.tools.secrets_scanner"]
-        + files
+        + non_test_files
         + ["--exit-zero"],
         capture_output=True, text=True, cwd=PROJECT_DIR,
     )

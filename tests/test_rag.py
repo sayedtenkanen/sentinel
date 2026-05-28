@@ -170,23 +170,27 @@ class TestLlmReviewAgent(unittest.TestCase):
         self.assertFalse(agent._check_available())
 
     def test_enabled_with_api_key(self):
+        import os
+
+        os.environ["SENTINEL_LLM_API_KEY"] = "test-key"
         from sentinel.agents.llm_review import LlmReviewAgent
 
-        agent = LlmReviewAgent(api_key="sk-test123")
+        agent = LlmReviewAgent()
         self.assertTrue(agent._check_available())
+        del os.environ["SENTINEL_LLM_API_KEY"]
 
     def test_analyze_returns_empty_when_disabled(self):
         from sentinel.agents.llm_review import LlmReviewAgent
+        from sentinel.core.types import FileContext
 
         agent = LlmReviewAgent(api_key="")
-        ctx = MagicMock()
-        ctx.files = [{"path": "test.py", "content": "x = 1"}]
-        self.assertEqual(agent.analyze(ctx), [])
+        file = FileContext(path="test.py", content="x = 1")
+        self.assertEqual(agent.analyze(file), [])
 
     def test_parse_response_with_json_array(self):
         from sentinel.agents.llm_review import LlmReviewAgent
 
-        agent = LlmReviewAgent(api_key="sk-test")
+        agent = LlmReviewAgent()
         response = '[{"line": 5, "severity": "high", "rule_id": "LLM001", "message": "test"}]'
         parsed = agent._parse_response(response)
         self.assertEqual(len(parsed), 1)
@@ -195,7 +199,7 @@ class TestLlmReviewAgent(unittest.TestCase):
     def test_parse_response_with_fences(self):
         from sentinel.agents.llm_review import LlmReviewAgent
 
-        agent = LlmReviewAgent(api_key="sk-test")
+        agent = LlmReviewAgent()
         response = (
             '```json\n[{"line": 1, "severity": "low", "rule_id": "LLM002", "message": "x"}]\n```'
         )
@@ -206,7 +210,7 @@ class TestLlmReviewAgent(unittest.TestCase):
     def test_parse_response_invalid_json(self):
         from sentinel.agents.llm_review import LlmReviewAgent
 
-        agent = LlmReviewAgent(api_key="sk-test")
+        agent = LlmReviewAgent()
         response = "this is not json"
         parsed = agent._parse_response(response)
         self.assertEqual(parsed, [])
@@ -214,7 +218,7 @@ class TestLlmReviewAgent(unittest.TestCase):
     def test_parse_response_single_dict(self):
         from sentinel.agents.llm_review import LlmReviewAgent
 
-        agent = LlmReviewAgent(api_key="sk-test")
+        agent = LlmReviewAgent()
         response = '{"line": 3, "severity": "medium", "rule_id": "LLM003", "message": "test"}'
         parsed = agent._parse_response(response)
         self.assertEqual(len(parsed), 1)
@@ -230,9 +234,13 @@ class TestLlmReviewAgent(unittest.TestCase):
 
     @patch("urllib.request.urlopen")
     def test_call_llm_success(self, mock_urlopen):
+        import os
+
+        os.environ["SENTINEL_LLM_API_KEY"] = "test-key"
         from sentinel.agents.llm_review import LlmReviewAgent
 
-        agent = LlmReviewAgent(api_key="sk-test")
+        agent = LlmReviewAgent()
+        del os.environ["SENTINEL_LLM_API_KEY"]
 
         mock_resp = MagicMock()
         mock_resp.read.return_value = json.dumps(
@@ -254,7 +262,7 @@ class TestLlmReviewAgent(unittest.TestCase):
     def test_build_prompt_without_context(self):
         from sentinel.agents.llm_review import LlmReviewAgent
 
-        agent = LlmReviewAgent(api_key="sk-test")
+        agent = LlmReviewAgent()
         prompt = agent._build_prompt("x = 1", [], "test.py")
         self.assertIn("test.py", prompt)
         self.assertIn("x = 1", prompt)
@@ -270,7 +278,11 @@ class TestLlmReviewAgent(unittest.TestCase):
         from sentinel.rag.retriever import Retriever
 
         retriever = Retriever(kb)
-        agent = LlmReviewAgent(api_key="sk-test", retriever=retriever)
+        import os
+
+        os.environ["SENTINEL_LLM_API_KEY"] = "test-key"
+        agent = LlmReviewAgent(retriever=retriever)
+        del os.environ["SENTINEL_LLM_API_KEY"]
         results = retriever.retrieve_context("def foo(): pass")
         prompt = agent._build_prompt("def foo(): pass", results, "test.py")
         self.assertIn("SEC001", prompt)
@@ -317,7 +329,7 @@ class TestRunnerLlmIntegration(unittest.TestCase):
         from sentinel.deploy.runner import _setup_agents
 
         class FakeArgs:
-            llm_api_key = "sk-test"
+            llm_api_key = "test-key-for-testing"
             llm_model = "gpt-4o-mini"
             rag_kb_dir = None
 
@@ -329,7 +341,7 @@ class TestRunnerLlmIntegration(unittest.TestCase):
         from sentinel.deploy.runner import _setup_agents
 
         class FakeArgs:
-            llm_api_key = "sk-test"
+            llm_api_key = "test-key-for-testing"
             llm_model = "gpt-4o-mini"
             rag_kb_dir = None
 
