@@ -1,11 +1,4 @@
-# Getting Started
-
-## Prerequisites
-
-- Python 3.9+
-- No external dependencies required (pure stdlib)
-
-## Quick Start
+# Quick Start
 
 ```bash
 # Review a single file
@@ -16,7 +9,7 @@ python -m sentinel.deploy.runner path/to/dir/
 
 # Install as a CLI command
 pip install -e .
-code-review-bot path/to/file.py
+sentinel path/to/file.py
 ```
 
 ## Output Formats
@@ -41,11 +34,20 @@ python -m sentinel.deploy.runner file.py --disable-agent security --disable-agen
 # Available agents: static-analysis, security, style, best-practices, documentation
 ```
 
-## Tracing
+## Tracing & Feedback
 
 ```bash
-# Enable trace export (ADLC Monitor phase)
+# Enable trace export
 python -m sentinel.deploy.runner file.py -v --trace-dir ./traces
+
+# With cost cap
+python -m sentinel.deploy.runner file.py --cost-cap 0.05
+
+# Submit feedback on a finding
+python -m sentinel.deploy.runner --feedback <finding_id> trace_20250101_120000.json --rating incorrect --comment "Wrong"
+
+# Start dashboard
+python -m sentinel.monitor.dashboard --port 8080 --trace-dir ./traces
 ```
 
 ---
@@ -58,11 +60,13 @@ python -m sentinel.deploy.runner file.py -v --trace-dir ./traces
 sentinel/
 ├── core/           # Base agent, orchestrator, types, context
 ├── agents/         # Sub-agents (static analysis, security, style, etc.)
-├── tools/          # AST parsing, git diff, language detection
+├── tools/          # AST parsing, git diff, config loader, secrets scanner
 ├── reporting/      # Markdown and JSON report generators
-├── monitor/        # Tracer for ADLC Monitor phase
+├── monitor/        # Tracer + Dashboard (Monitor phase)
+├── govern/         # Cost tracker, context hub, agent registry (Govern/Deploy)
 ├── test/
 │   ├── evals.py    # ADLC Test phase: eval suite
+│   ├── simulations.py  # Multi-turn synthetic interaction tests
 │   └── fixtures/   # good_code.py + bad_code.py regression datasets
 └── deploy/         # CLI runner
 ```
@@ -86,8 +90,8 @@ class YourAgent(BaseAgent):
         return findings
 ```
 
-2. Register in `core/orchestrator.py` — add to `ORCHESTRATOR_AGENTS` list
-3. Add to `deploy/runner.py` — add to agent list and `--disable-agent` choices
+2. Register in `sentinel/govern/registry.py` — add to `AgentRegistry.default()`
+3. Add to `sentinel/deploy/runner.py` — add to `_setup_agents()` and `--disable-agent` choices
 4. Add test cases in `test/fixtures/bad_code.py` and `tests/test_agents.py`
 
 ## Adding a New Rule to an Existing Agent
@@ -101,11 +105,14 @@ class YourAgent(BaseAgent):
 ## Running Tests
 
 ```bash
-# Unit tests
+# Unit tests (264 total)
 python -m unittest discover -s tests/ -v
 
 # ADLC eval suite
 python -m sentinel.test.evals
+
+# Simulation engine (3 scenarios, 6 steps)
+python -m sentinel.test.simulations
 
 # Coverage
 pip install coverage
@@ -122,6 +129,16 @@ The `test/fixtures/` directory contains two critical files:
 
 When adding a new rule, add matching examples to both files. This is the ADLC Test phase: *"Datasets are how teams preserve what they learn."*
 
+## Simulation Scenarios
+
+The simulation engine (`sentinel/test/simulations.py`) runs 3 multi-turn scenarios:
+
+1. **Bad to Good** — review bad_code.py → 89 findings, then good_code.py → 4 findings
+2. **No Regression** — clean code → 2 findings, add eval() → 3 findings including SEC003
+3. **Severity Improves** — critical code → 5 findings, fixed version → 1 low finding
+
+Add new scenarios via `DEFAULT_SCENARIOS` in `simulations.py`.
+
 ## Commit Conventions
 
 - One change per commit (new agent, new rule, bug fix, docs)
@@ -133,4 +150,7 @@ When adding a new rule, add matching examples to both files. This is the ADLC Te
 - **No external dependencies** — keep it pure stdlib. Zero install friction.
 - **Agents are independent** — each `analyze()` is self-contained. No shared mutable state.
 - **Tracer is pluggable** — swap for OpenTelemetry, LangSmith, etc. by implementing `trace()`.
+- **CostTracker** — wired through orchestrator, supports per-agent rates for LLM agents.
+- **Feedback** — stored as `feedback_trace_*.json` alongside trace files, consumed by dashboard.
+- **Context Hub** — versioned profiles stored as JSON with SHA-256 hashes per entry.
 - **Eval datasets mirror production** — regressions are caught before deployment.

@@ -1,3 +1,5 @@
+"""Best practices analysis agent for detecting common anti-patterns."""
+
 from __future__ import annotations
 
 import ast
@@ -161,7 +163,7 @@ class BestPracticesAgent(BaseAgent):
             stripped = line.strip()
             if (
                 not stripped.startswith("with")
-                and re.search(r"\bopen\s*\(", stripped)
+                and re.search(r"(?<!\.)\bopen\s*\(", stripped)
                 and not stripped.startswith("#")
             ):
                 findings.append(

@@ -8,6 +8,9 @@ from sentinel.core.context import ReviewContext
 from sentinel.core.types import (
     AgentResult,
     AgentStatus,
+    Feedback,
+    FeedbackRating,
+    FeedbackType,
     FileContext,
     Finding,
     ReviewReport,
@@ -155,6 +158,34 @@ class TestReviewContext(unittest.TestCase):
         ctx = ReviewContext()
         self.assertIn("max_line_length", ctx.config)
         self.assertIn("complexity_threshold", ctx.config)
+
+
+class TestFeedback(unittest.TestCase):
+    def test_feedback_defaults(self):
+        fb = Feedback(finding_id="abc123")
+        self.assertEqual(fb.finding_id, "abc123")
+        self.assertEqual(fb.feedback_type, FeedbackType.HUMAN)
+        self.assertEqual(fb.rating, FeedbackRating.UNSURE)
+        self.assertEqual(fb.comment, "")
+        self.assertIsNotNone(fb.timestamp)
+
+    def test_feedback_custom(self):
+        fb = Feedback(
+            finding_id="xyz",
+            trace_file="trace_123.json",
+            feedback_type=FeedbackType.LLM,
+            rating=FeedbackRating.CORRECT,
+            comment="Valid finding",
+        )
+        self.assertEqual(fb.finding_id, "xyz")
+        self.assertEqual(fb.trace_file, "trace_123.json")
+        self.assertEqual(fb.feedback_type, FeedbackType.LLM)
+        self.assertEqual(fb.rating, FeedbackRating.CORRECT)
+        self.assertEqual(fb.comment, "Valid finding")
+
+    def test_finding_reviewed_default(self):
+        f = Finding()
+        self.assertFalse(f.reviewed)
 
 
 if __name__ == "__main__":

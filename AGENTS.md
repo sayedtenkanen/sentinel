@@ -7,71 +7,48 @@ sentinel/
 ├── core/
 │   ├── base_agent.py      # Abstract base for all agents (analyze + run lifecycle)
 │   ├── context.py          # ReviewContext: files + config for a review session
-│   ├── orchestrator.py     # Coordinates sub-agents, collects results, integrates tracer
-│   └── types.py            # Data models: Finding, Severity, ReviewReport, TraceEvent
+│   ├── orchestrator.py     # Coordinates sub-agents, collects results, integrates tracer + cost tracker
+│   └── types.py            # Data models: Finding, Severity, ReviewReport, TraceEvent, Feedback
 ├── agents/
-│   ├── static_analysis.py  # Cyclomatic complexity, line length, nesting, unused imports
-│   ├── security.py         # 17 security patterns (eval, pickle, SQLi, secrets, etc.)
+│   ├── static_analysis.py  # Cyclomatic complexity, line length, nesting, unused imports, params
+│   ├── security.py         # 32 security patterns (eval, pickle, SQLi, secrets, etc.)
 │   ├── style.py            # Import order, naming conventions, docstrings, magic numbers
 │   ├── best_practices.py   # Bare excepts, mutable defaults, globals, type hints, context mgrs
-│   └── summary.py          # Compiles final verdict and severity breakdown
+│   ├── documentation.py    # Module/function/class docstrings, comment coverage
+│   └── summary.py          # Compiles final verdict, severity breakdown, cost summary
 ├── tools/
 │   ├── ast_tools.py        # AST-based complexity, function length, unused import detection
-│   └── git_tools.py        # Diff parsing, language detection
+│   ├── config.py           # .code-review.json loader with filter/suppress/matches helpers
+│   ├── git_tools.py        # Diff parsing, language detection
+│   └── secrets_scanner.py  # Standalone secrets scanner (20+ patterns)
 ├── reporting/
 │   └── report.py           # Markdown and JSON report generators
 ├── monitor/
-│   └── tracer.py           # Trace events, metrics, JSON export (ADLC Monitor phase)
+│   ├── tracer.py           # Trace events, metrics, feedback storage, JSON export (Monitor phase)
+│   └── dashboard.py        # Web dashboard with feedback POST API and trend chart
+├── govern/
+│   ├── cost.py             # CostTracker — per-agent cost tracking with caps (Govern phase)
+│   ├── context_hub.py      # ContextHub — versioned profiles for rules, policies, prompts (Deploy)
+│   └── registry.py         # AgentRegistry — discoverable agent info with config schemas (Govern)
 ├── test/
 │   ├── evals.py            # Eval suite runner with pass/fail scoring
+│   ├── simulations.py      # Simulation engine — multi-turn synthetic interaction testing
 │   └── fixtures/
 │       ├── good_code.py    # Known-good eval dataset
-│       └── bad_code.py     # Known-bad eval dataset
+│       └── bad_code.py     # Known-bad eval dataset (89 findings across all agents)
 └── deploy/
-    └── runner.py           # CLI entry point
+    └── runner.py           # CLI entry point with review + feedback submission
 ```
 
 ## ADLC Phase Mapping
 
-| ADLC Phase | Implementation | Gaps |
+| ADLC Phase | Implementation | Status |
 |---|---|---|
-| **Build** | Sub-agents (5), orchestrator, tools, base framework | No runtime/state persistence — agents are stateless, single-pass |
-| **Test** | `test/evals.py`, fixtures, experiment runner, 196 unit tests | **No multi-turn simulations** — evals are single-pass, no synthetic interaction testing |
-| **Deploy** | `deploy/runner.py` CLI with `--format`, `--output`, `--disable-agent`, `--trace-dir` | No durable execution, no sandbox, no context hub |
-| **Monitor** | `monitor/tracer.py` captures trace events; `monitor/dashboard.py` HTML/JSON dashboard | **No feedback pipeline** — no human/LLM feedback stored alongside traces. No LLM-as-judge signals |
-| **Govern** | `--disable-agent`, `suppress` rules, severity-weighted scoring, JSON audit trails | **No cost tracking**, no agent discoverability registry |
-
-## Known ADLC Gaps (Future Work)
-
-Priority-ordered gaps from the ADLC article by Harrison Chase:
-
-1. **Feedback Pipeline** (Monitor) — Store human + LLM feedback alongside traces. ADLC: *"store feedback with those traces."* Would enable: flagging false positives, marking findings as reviewed, and feeding real-world signal back into eval datasets.
-
-2. **Simulation Engine** (Test) — Multi-turn synthetic interactions for regression testing agents. ADLC: *"multi-turn evals and simulated end-to-end interactions."* Our fixtures are single-pass static files.
-
-3. **Cost Governance** (Govern) — Track and cap per-review cost. ADLC: *"track and manage spend through budgets, usage monitoring, alerts."* Less critical for static analysis, but would matter if integrating LLM-based reviewers.
-
-4. **Context Hub** (Deploy) — Versioned, editable storage for review rules, suppression policies, and agent prompts. ADLC: *"store, version, review, and update the non-code parts of the agent."*
-
-5. **Agent Registry** (Govern) — Discoverability for agents/configs. ADLC: *"reusable assets — prompts, skills, tools, retrieval sources, policies."* Would let teams share and compose review profiles.
-
-## Build Steps
-
-1. Created project structure with `core/`, `agents/`, `tools/`, `reporting/`, `monitor/`, `test/`, `deploy/`
-2. Defined shared types: `Severity`, `Finding`, `AgentResult`, `ReviewReport`, `TraceEvent`
-3. Built `BaseAgent` abstract class with `analyze()` + `run()` lifecycle (timing, error handling, tracing)
-4. Built 4 sub-agents:
-   - **StaticAnalysis**: complexity (cyclomatic), function length, line length, nesting, unused imports, trailing whitespace
-   - **Security**: 17 regex patterns (eval, exec, pickle, SQLi, shell injection, hardcoded creds, etc.) with severity tiering
-   - **Style**: import order grouping, CapWords/snake_case validation, docstrings, magic numbers, is-vs-== checks
-   - **BestPractices**: bare excepts, lambda assignments, mutable defaults, globals, type hints, context manager enforcement
-5. Built `Orchestrator` to fan out reviews to all agents and collect results
-6. Built AST analysis tools for complexity/import analysis
-7. Built `Tracer` for ADLC Monitor phase — captures per-agent trace events with duration, errors, metadata
-8. Built `report.py` for markdown and JSON report generation
-9. Built `runner.py` CLI with argument parsing
-10. Built eval fixtures (`good_code.py`, `bad_code.py`) and `evals.py` test runner
-11. Fixed misplaced `import re` in best_practices.py, fixed `startswith` and regex edge cases for inline comments
+| **Build** | 5 sub-agents + documentation agent, orchestrator, tools, base framework | ✅ Complete |
+| **Test** | `test/evals.py` (2 fixtures, 100% score), `test/simulations.py` (3 scenarios, 6/6 steps), 264 unit tests | ✅ Complete (multi-turn sims added) |
+| **Deploy** | `deploy/runner.py` CLI with `--format`, `--output`, `--disable-agent`, `--trace-dir`, `--config`, `--cost-cap`, `--feedback`; `govern/context_hub.py` for versioned profiles | ✅ Complete (context hub added) |
+| **Monitor** | `monitor/tracer.py` captures trace events + metrics + feedbacks; `monitor/dashboard.py` HTML/JSON dashboard with `/api/feedback` POST endpoint | ✅ Complete (feedback pipeline added) |
+| **Govern** | `--disable-agent`, `suppress` rules, severity-weighted scoring, JSON audit trails; `govern/cost.py` cost caps; `govern/registry.py` agent discoverability | ✅ Complete (cost + registry added) |
 
 ## CLI Usage
 
@@ -91,8 +68,20 @@ python -m sentinel.deploy.runner path/to/file.py --disable-agent style --disable
 # Verbose mode with trace export
 python -m sentinel.deploy.runner path/to/file.py -v --trace-dir ./traces
 
+# With cost cap (in dollars)
+python -m sentinel.deploy.runner path/to/file.py --cost-cap 0.05
+
 # Write to file
 python -m sentinel.deploy.runner path/to/file.py -o report.md
+
+# Submit feedback for a finding (flag as correct/incorrect)
+python -m sentinel.deploy.runner --feedback <finding_id> trace_20250101_120000.json --rating incorrect --comment "False positive"
+
+# Dashboard
+python -m sentinel.monitor.dashboard --port 8080 --trace-dir ./traces
+
+# Simulation engine
+python -m sentinel.test.simulations
 ```
 
 ## Running Tests & Quality Checks
@@ -100,6 +89,9 @@ python -m sentinel.deploy.runner path/to/file.py -o report.md
 ```bash
 # Run eval suite (ADLC Test phase)
 python -m sentinel.test.evals
+
+# Run simulation engine (ADLC Test phase — multi-turn)
+python -m sentinel.test.simulations
 
 # Run all unit tests
 python -m unittest discover -s tests/ -q
@@ -128,11 +120,27 @@ python -m sentinel.tools.secrets_scanner --recursive sentinel/
 SKIP=ty,secrets git commit -m "skips type check and secrets scan"
 ```
 
-Expected: 100% on both good_code and bad_code fixtures, 179+ tests passing, 85%+ coverage, zero ruff/ty errors.
+Expected: 100% on both good_code and bad_code fixtures, **264 tests passing**, 3/3 simulation scenarios passing, 85%+ coverage, zero ruff/ty errors.
+
+## ADLC Gaps (All Resolved)
+
+| Gap | Resolution |
+|---|---|
+| **Feedback Pipeline** (Monitor) | `Tracer.store_feedback()` + `export_feedback()` + dashboard `POST /api/feedback` + `--feedback` CLI flag |
+| **Simulation Engine** (Test) | `sentinel/test/simulations.py` with 3 scenarios (bad→good, no regression, severity improves), 6/6 steps passing |
+| **Cost Governance** (Govern) | `sentinel/govern/cost.py` — `CostTracker` with per-agent rates, cost caps, summary in report |
+| **Context Hub** (Deploy) | `sentinel/govern/context_hub.py` — versioned named profiles with get/set/delete, SHA-256 version tracking |
+| **Agent Registry** (Govern) | `sentinel/govern/registry.py` — `AgentRegistry.default()` with 6 agents, config schemas, tag/capability search |
 
 ## Key Design Decisions
 
-- **No external dependencies** — pure Python stdlib (AST, re, json, dataclasses). Zero install friction.
+- **No external dependencies** — pure Python stdlib (AST, re, json, dataclasses, http.server). Zero install friction.
 - **Agents are independent** — each `analyze()` is self-contained. Easy to add/remove/reorder.
 - **Tracer is pluggable** — can be swapped for OpenTelemetry, LangSmith, etc.
+- **CostTracker is wired through orchestrator** — automatically tracks duration per agent, supports custom rates for LLM agents.
+- **Feedback stored as separate JSON files** (`feedback_trace_*.json`) alongside trace files, loaded by dashboard.
+- **Context Hub profiles** stored as `{base_dir}/{name}.json` with SHA-256 version hashes per entry.
+- **Simulation engine** allows multi-step scenarios with finding range expectations and rule ID checks.
+- **Agent Registry** provides a static `default()` with all built-in agents and their config schemas.
 - **Eval datasets mirror production** — good_code and bad_code fixtures serve as regression dataset per the ADLC article: *"Datasets are how teams preserve what they learn."*
+- **Suppress rules** support fnmatch wildcards on both `rule` and `pattern` fields in `.code-review.json`.

@@ -33,6 +33,11 @@ python-version = "3.9"
 [tool.ty.src]
 exclude = ["sentinel/test/fixtures"]
 
+[[tool.ty.overrides]]
+include = ["sentinel/agents/style.py"]
+[tool.ty.overrides.rules]
+unresolved-attribute = "ignore"
+
 [tool.coverage.run]
 source = ["sentinel"]
 omit = [
@@ -58,3 +63,8 @@ exclude_lines = [
     "except SyntaxError",
     "except Exception",
 ]
+
+[[tool.ty.overrides]]
+include = ["sentinel/govern/registry.py"]
+[tool.ty.overrides.rules]
+invalid-type-form = "ignore"

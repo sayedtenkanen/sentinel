@@ -1,3 +1,5 @@
+"""Security analysis agent for detecting vulnerabilities and secrets."""
+
 from __future__ import annotations
 
 import re

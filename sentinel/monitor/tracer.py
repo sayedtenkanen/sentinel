@@ -1,3 +1,5 @@
+"""Tracer for capturing trace events and metrics (Monitor phase)."""
+
 from __future__ import annotations
 
 import json
@@ -5,7 +7,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from ..core.types import TraceEvent
+from ..core.types import Feedback, TraceEvent
 
 
 @dataclass
@@ -21,11 +23,14 @@ class Tracer:
         self,
         log_dir: str | None = None,
         enabled: bool = True,
+        feedback_dir: str | None = None,
     ) -> None:
         self.enabled = enabled
         self._events: list[TraceEvent] = []
         self._metrics: list[MetricPoint] = []
+        self._feedbacks: list[Feedback] = []
         self.log_dir = log_dir
+        self.feedback_dir = feedback_dir or log_dir
 
     def trace(self, event: TraceEvent) -> None:
         if not self.enabled:
@@ -42,6 +47,14 @@ class Tracer:
                 labels=labels or {},
             )
         )
+
+    def store_feedback(self, feedback: Feedback) -> None:
+        if not self.enabled:
+            return
+        self._feedbacks.append(feedback)
+
+    def get_feedback(self) -> list[Feedback]:
+        return list(self._feedbacks)
 
     def get_events(self) -> list[TraceEvent]:
         return list(self._events)
@@ -88,9 +101,42 @@ class Tracer:
                 }
                 for m in self._metrics
             ],
+            "feedbacks": [
+                {
+                    "finding_id": f.finding_id,
+                    "trace_file": f.trace_file,
+                    "feedback_type": f.feedback_type.value,
+                    "rating": f.rating.value,
+                    "comment": f.comment,
+                    "timestamp": f.timestamp.isoformat(),
+                }
+                for f in self._feedbacks
+            ],
         }
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
+
+    def export_feedback(self, trace_filename: str) -> str | None:
+        if not self._feedbacks:
+            return None
+        if not self.feedback_dir:
+            return None
+        os.makedirs(self.feedback_dir, exist_ok=True)
+        path = os.path.join(self.feedback_dir, f"feedback_{trace_filename}")
+        data = [
+            {
+                "finding_id": f.finding_id,
+                "trace_file": f.trace_file,
+                "feedback_type": f.feedback_type.value,
+                "rating": f.rating.value,
+                "comment": f.comment,
+                "timestamp": f.timestamp.isoformat(),
+            }
+            for f in self._feedbacks
+        ]
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2)
+        return path
 
     def flush(self) -> None:
         if not self.log_dir:
@@ -99,3 +145,5 @@ class Tracer:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         path = os.path.join(self.log_dir, f"trace_{timestamp}.json")
         self.export_trace(path)
+        if self._feedbacks:
+            self.export_feedback(f"trace_{timestamp}.json")

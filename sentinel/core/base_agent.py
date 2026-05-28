@@ -1,3 +1,5 @@
+"""Abstract base class for all sentinel agents."""
+
 from __future__ import annotations
 
 import time

@@ -1,5 +1,8 @@
+"""Static analysis agent for code complexity and quality metrics."""
+
 from __future__ import annotations
 
+import ast
 import re
 
 from ..core.base_agent import BaseAgent
@@ -20,12 +23,14 @@ class StaticAnalysisAgent(BaseAgent):
         max_function_length: int = 50,
         max_line_length: int = 100,
         max_nesting_depth: int = 6,
+        max_params: int = 8,
     ) -> None:
         super().__init__(name="static-analysis", enabled=enabled)
         self.complexity_threshold = complexity_threshold
         self.max_function_length = max_function_length
         self.max_line_length = max_line_length
         self.max_nesting_depth = max_nesting_depth
+        self.max_params = max_params
 
     def analyze(self, file: FileContext) -> list[Finding]:
         findings: list[Finding] = []
@@ -161,8 +166,6 @@ class StaticAnalysisAgent(BaseAgent):
                 blank_count = 0
 
     def _check_too_many_params(self, findings: list[Finding], source: str, path: str) -> None:
-        import ast
-
         try:
             tree = ast.parse(source)
             for node in ast.walk(tree):
@@ -172,11 +175,11 @@ class StaticAnalysisAgent(BaseAgent):
                         param_count += 1
                     if node.args.kwarg:
                         param_count += 1
-                    if param_count > 8:
+                    if param_count > self.max_params:
                         findings.append(
                             self.finding(
                                 severity=Severity.MEDIUM,
-                                message=f"'{node.name}' has {param_count} params (limit: 8)",
+                                message=f"'{node.name}' has {param_count} params (limit: {self.max_params})",
                                 suggestion="Use a dataclass or split into smaller functions",
                                 file=path,
                                 line=node.lineno or 0,

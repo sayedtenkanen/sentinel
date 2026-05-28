@@ -1,3 +1,5 @@
+"""Markdown and JSON report generators."""
+
 from __future__ import annotations
 
 import json
@@ -35,32 +37,24 @@ def format_finding(finding: Finding) -> str:
     return "\n\n".join(parts)
 
 
-def to_markdown(report: ReviewReport, summary_text: str) -> str:
-    sections: list[str] = []
+def _header_section(report: ReviewReport) -> str:
+    sections = [
+        "# Code Review Report",
+        "",
+        f"**ID:** `{report.id}`",
+        f"**Scope:** `{report.scope.value}`",
+        f"**Files:** {len(report.files_reviewed)}",
+        f"**Duration:** {report.duration_ms:.0f}ms",
+        f"**Score:** {report.score}/100",
+        "",
+        "---",
+        "",
+    ]
+    return "\n".join(sections)
 
-    sections.append("# Code Review Report")
-    sections.append("")
-    sections.append(f"**ID:** `{report.id}`")
-    sections.append(f"**Scope:** `{report.scope.value}`")
-    sections.append(f"**Files:** {len(report.files_reviewed)}")
-    sections.append(f"**Duration:** {report.duration_ms:.0f}ms")
-    sections.append(f"**Score:** {report.score}/100")
-    sections.append("")
-    sections.append("---")
-    sections.append("")
 
-    sections.append(summary_text)
-    sections.append("")
-    sections.append("---")
-    sections.append("")
-
-    if not report.all_findings:
-        sections.append("✅ No issues found. Great work!")
-        return "\n".join(sections)
-
-    sections.append("## Detailed Findings")
-    sections.append("")
-
+def _findings_sections(report: ReviewReport) -> str:
+    sections = ["## Detailed Findings", ""]
     by_severity = {
         Severity.CRITICAL: [],
         Severity.HIGH: [],
@@ -68,7 +62,6 @@ def to_markdown(report: ReviewReport, summary_text: str) -> str:
         Severity.LOW: [],
         Severity.INFO: [],
     }
-
     for finding in report.all_findings:
         by_severity[finding.severity].append(finding)
 
@@ -89,8 +82,32 @@ def to_markdown(report: ReviewReport, summary_text: str) -> str:
             sections.append("")
         sections.append("---")
         sections.append("")
-
     return "\n".join(sections)
+
+
+def to_markdown(report: ReviewReport, summary_text: str) -> str:
+    if not report.all_findings:
+        return "\n".join(
+            [
+                _header_section(report),
+                summary_text,
+                "",
+                "---",
+                "",
+                "✅ No issues found. Great work!",
+            ]
+        )
+
+    return "\n".join(
+        [
+            _header_section(report),
+            summary_text,
+            "",
+            "---",
+            "",
+            _findings_sections(report),
+        ]
+    )
 
 
 def to_json(report: ReviewReport, summary_text: str) -> str:

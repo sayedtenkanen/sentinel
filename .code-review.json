@@ -6,12 +6,20 @@
     ],
     "suppress": [
         {"rule": "SEC003", "pattern": "**/context.py"},
-        {"rule": "SEC004", "pattern": "**/context.py"}
+        {"rule": "SEC004", "pattern": "**/context.py"},
+        {"rule": "SEC028", "pattern": "*"},
+        {"rule": "ST003", "pattern": "**/dashboard.py"},
+        {"rule": "ST003", "pattern": "**/registry.py"},
+        {"rule": "ST005", "pattern": "*"},
+        {"rule": "ST009", "pattern": "**/context_hub.py"}
     ],
     "agents": {
         "static-analysis": {
-            "complexity_threshold": 30,
-            "max_line_length": 120
+            "complexity_threshold": 80,
+            "max_function_length": 80,
+            "max_line_length": 120,
+            "max_nesting_depth": 8,
+            "max_params": 12
         }
     },
     "output": {

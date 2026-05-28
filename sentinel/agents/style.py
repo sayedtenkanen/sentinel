@@ -1,10 +1,39 @@
+"""Style analysis agent for code formatting and naming conventions."""
+
 from __future__ import annotations
 
+import ast
 import re
 
 from ..core.base_agent import BaseAgent
 from ..core.types import FileContext, Finding, Severity
 from ..tools.git_tools import detect_language
+
+STDLIB_MODULES = {
+    "os",
+    "sys",
+    "re",
+    "json",
+    "math",
+    "datetime",
+    "pathlib",
+    "collections",
+    "functools",
+    "itertools",
+    "typing",
+    "abc",
+    "uuid",
+    "hashlib",
+    "base64",
+    "copy",
+    "enum",
+    "dataclasses",
+    "inspect",
+    "logging",
+    "argparse",
+    "subprocess",
+    "tempfile",
+}
 
 
 class StyleAgent(BaseAgent):
@@ -29,63 +58,46 @@ class StyleAgent(BaseAgent):
 
         return findings
 
+    def _is_stdlib_import(self, name: str) -> bool:
+        return name in STDLIB_MODULES or name == "__future__"
+
+    def _classify_import_line(self, line: str) -> str:
+        first_part = line.split()[1].split(".")[0]
+        if self._is_stdlib_import(first_part):
+            return "stdlib"
+        if first_part.startswith(".") or first_part.startswith("sentinel"):
+            return "local"
+        return "third_party"
+
     def _check_import_order(self, findings: list[Finding], lines: list[str], path: str) -> None:
         stdlib_imports = []
         third_party_imports = []
-        local_imports = []
-
-        stdlib_modules = {
-            "os",
-            "sys",
-            "re",
-            "json",
-            "math",
-            "datetime",
-            "pathlib",
-            "collections",
-            "functools",
-            "itertools",
-            "typing",
-            "abc",
-            "uuid",
-            "hashlib",
-            "base64",
-            "copy",
-            "enum",
-            "dataclasses",
-            "inspect",
-            "logging",
-            "argparse",
-            "subprocess",
-            "tempfile",
-        }
 
         for i, line in enumerate(lines, 1):
             stripped = line.strip()
             if stripped.startswith("import ") or stripped.startswith("from "):
-                first_part = stripped.split()[1].split(".")[0]
-                if first_part in stdlib_modules or first_part == "__future__":
+                kind = self._classify_import_line(stripped)
+                if kind == "stdlib":
                     stdlib_imports.append(i)
-                elif first_part.startswith(".") or first_part.startswith("sentinel"):
-                    local_imports.append(i)
-                else:
+                elif kind == "third_party":
                     third_party_imports.append(i)
 
-        if stdlib_imports and third_party_imports:
-            last_stdlib = max(stdlib_imports)
-            first_third = min(third_party_imports)
-            if first_third < last_stdlib:
-                findings.append(
-                    self.finding(
-                        severity=Severity.LOW,
-                        message="Imports should be grouped: stdlib, third-party, local",
-                        suggestion="Organize imports as: standard library → third-party → local",
-                        file=path,
-                        line=first_third,
-                        rule_id="STY001",
-                        category="style",
-                    )
+        if (
+            stdlib_imports
+            and third_party_imports
+            and min(third_party_imports) < max(stdlib_imports)
+        ):
+            findings.append(
+                self.finding(
+                    severity=Severity.LOW,
+                    message="Imports should be grouped: stdlib, third-party, local",
+                    suggestion="Organize imports as: standard library → third-party → local",
+                    file=path,
+                    line=min(third_party_imports),
+                    rule_id="STY001",
+                    category="style",
                 )
+            )
 
     def _check_naming_conventions(
         self, findings: list[Finding], lines: list[str], path: str
@@ -127,48 +139,45 @@ class StyleAgent(BaseAgent):
                         )
                     )
 
-    def _check_missing_docstrings(self, findings: list[Finding], source: str, path: str) -> None:
-        import ast
+    def _has_docstring(self, node: ast.AST) -> bool:
+        return (
+            isinstance(node.body[0], ast.Expr)
+            and isinstance(node.body[0].value, ast.Constant)
+            and isinstance(node.body[0].value.value, str)
+        )
 
+    def _check_missing_docstrings(self, findings: list[Finding], source: str, path: str) -> None:
         try:
             tree = ast.parse(source)
             for node in ast.walk(tree):
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    has_docstring = (
-                        isinstance(node.body[0], ast.Expr)
-                        and isinstance(node.body[0].value, ast.Constant)
-                        and isinstance(node.body[0].value.value, str)
-                    )
-                    if not has_docstring and not node.name.startswith("_"):
-                        findings.append(
-                            self.finding(
-                                severity=Severity.INFO,
-                                message=f"Function '{node.name}' is missing a docstring",
-                                suggestion="Add a docstring describing purpose, args, and returns",
-                                file=path,
-                                line=node.lineno or 0,
-                                rule_id="STY004",
-                                category="style",
-                            )
+                    if self._has_docstring(node) or node.name.startswith("_"):
+                        continue
+                    findings.append(
+                        self.finding(
+                            severity=Severity.INFO,
+                            message=f"Function '{node.name}' is missing a docstring",
+                            suggestion="Add a docstring describing purpose, args, and returns",
+                            file=path,
+                            line=node.lineno or 0,
+                            rule_id="STY004",
+                            category="style",
                         )
+                    )
                 elif isinstance(node, ast.ClassDef):
-                    has_docstring = (
-                        isinstance(node.body[0], ast.Expr)
-                        and isinstance(node.body[0].value, ast.Constant)
-                        and isinstance(node.body[0].value.value, str)
-                    )
-                    if not has_docstring:
-                        findings.append(
-                            self.finding(
-                                severity=Severity.INFO,
-                                message=f"Class '{node.name}' is missing a docstring",
-                                suggestion="Add a docstring describing the class purpose",
-                                file=path,
-                                line=node.lineno or 0,
-                                rule_id="STY005",
-                                category="style",
-                            )
+                    if self._has_docstring(node):
+                        continue
+                    findings.append(
+                        self.finding(
+                            severity=Severity.INFO,
+                            message=f"Class '{node.name}' is missing a docstring",
+                            suggestion="Add a docstring describing the class purpose",
+                            file=path,
+                            line=node.lineno or 0,
+                            rule_id="STY005",
+                            category="style",
                         )
+                    )
         except SyntaxError:
             pass
 
@@ -190,8 +199,6 @@ class StyleAgent(BaseAgent):
                 )
 
     def _check_unnecessary_else(self, findings: list[Finding], source: str, path: str) -> None:
-        import ast
-
         try:
             tree = ast.parse(source)
             for node in ast.walk(tree):
@@ -240,8 +247,6 @@ class StyleAgent(BaseAgent):
                 )
 
     def _check_inconsistent_returns(self, findings: list[Finding], source: str, path: str) -> None:
-        import ast
-
         try:
             tree = ast.parse(source)
             for node in ast.walk(tree):

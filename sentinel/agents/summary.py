@@ -1,3 +1,5 @@
+"""Summary agent for compiling review verdicts and severity breakdowns."""
+
 from __future__ import annotations
 
 from ..core.base_agent import BaseAgent
@@ -16,7 +18,7 @@ class SummaryAgent(BaseAgent):
     def analyze(self, file: FileContext) -> list[Finding]:
         return []
 
-    def summarize(self, report: ReviewReport) -> str:
+    def summarize(self, report: ReviewReport, cost_line: str = "") -> str:
         lines: list[str] = []
         findings = report.all_findings
         score = report.score
@@ -32,6 +34,8 @@ class SummaryAgent(BaseAgent):
         lines.append(f"**Files reviewed:** {len(report.files_reviewed)}")
         lines.append(f"**Findings total:** {len(findings)}")
         lines.append(f"**Duration:** {report.duration_ms:.0f}ms")
+        if cost_line:
+            lines.append(f"**{cost_line}**")
         lines.append("")
         lines.append("### Severity Breakdown")
         lines.append("")

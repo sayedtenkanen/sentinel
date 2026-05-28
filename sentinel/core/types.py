@@ -1,3 +1,5 @@
+"""Shared data models for findings, reports, and trace events."""
+
 from __future__ import annotations
 
 import uuid
@@ -27,6 +29,27 @@ class ReviewScope(Enum):
     PR = "pr"
 
 
+class FeedbackType(Enum):
+    HUMAN = "human"
+    LLM = "llm"
+
+
+class FeedbackRating(Enum):
+    CORRECT = "correct"
+    INCORRECT = "incorrect"
+    UNSURE = "unsure"
+
+
+@dataclass
+class Feedback:
+    finding_id: str
+    trace_file: str = ""
+    feedback_type: FeedbackType = FeedbackType.HUMAN
+    rating: FeedbackRating = FeedbackRating.UNSURE
+    comment: str = ""
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 @dataclass
 class FileContext:
     path: str
@@ -49,6 +72,7 @@ class Finding:
     code_snippet: str | None = None
     rule_id: str = ""
     category: str = ""
+    reviewed: bool = False
 
 
 @dataclass

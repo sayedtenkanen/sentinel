@@ -1,3 +1,5 @@
+"""AST-based analysis utilities for complexity and imports."""
+
 from __future__ import annotations
 
 import ast

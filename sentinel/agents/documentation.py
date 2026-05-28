@@ -1,3 +1,5 @@
+"""Documentation analysis agent for checking docstring coverage and quality."""
+
 from __future__ import annotations
 
 import ast

@@ -1,3 +1,5 @@
+"""Orchestrator for coordinating sub-agents and collecting results."""
+
 from __future__ import annotations
 
 import time
@@ -8,6 +10,7 @@ from ..agents.security import SecurityAgent
 from ..agents.static_analysis import StaticAnalysisAgent
 from ..agents.style import StyleAgent
 from ..agents.summary import SummaryAgent
+from ..govern.cost import CostTracker
 from ..monitor.tracer import Tracer
 from .base_agent import BaseAgent
 from .context import ReviewContext
@@ -25,6 +28,7 @@ class Orchestrator:
         self,
         agents: list[BaseAgent] | None = None,
         tracer: Tracer | None = None,
+        cost_tracker: CostTracker | None = None,
     ) -> None:
         self.agents = agents or [
             StaticAnalysisAgent(),
@@ -35,6 +39,7 @@ class Orchestrator:
         ]
         self.summary_agent = SummaryAgent()
         self.tracer = tracer or Tracer()
+        self.cost_tracker = cost_tracker or CostTracker()
 
     def review(self, context: ReviewContext) -> ReviewReport:
         start = time.perf_counter()
@@ -52,6 +57,18 @@ class Orchestrator:
         )
 
         for file in context.files:
+            if self.cost_tracker.cap_exceeded:
+                self.tracer.trace(
+                    TraceEvent(
+                        agent_name="orchestrator",
+                        event="review.cap_reached",
+                        metadata={
+                            "cost": self.cost_tracker.total_cost,
+                            "cap": self.cost_tracker.cost_cap,
+                        },
+                    )
+                )
+                break
             file_result = self._review_file(file, context)
             report.agent_results.extend(file_result)
 
@@ -65,6 +82,8 @@ class Orchestrator:
                 metadata={
                     "findings": len(report.all_findings),
                     "score": report.score,
+                    "total_cost": self.cost_tracker.total_cost,
+                    "cost_cap": self.cost_tracker.cost_cap,
                 },
             )
         )
@@ -83,6 +102,7 @@ class Orchestrator:
                 )
             )
             result = agent.run(file)
+            self.cost_tracker.track(agent.name, result.duration_ms)
             _event = f"run.{'completed' if result.status == AgentStatus.COMPLETED else 'failed'}"
             self.tracer.trace(
                 TraceEvent(
@@ -101,7 +121,7 @@ class Orchestrator:
         return results
 
     def summarize(self, report: ReviewReport) -> str:
-        return self.summary_agent.summarize(report)
+        return self.summary_agent.summarize(report, self.cost_tracker.report.summary_line())
 
     def get_agent_report(self, name: str, report: ReviewReport) -> AgentResult | None:
         for result in report.agent_results:
