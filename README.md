@@ -25,6 +25,12 @@ python -m sentinel.deploy.runner file.py -v --trace-dir ./traces --cost-cap 0.05
 # Submit feedback for a finding (Monitor phase)
 python -m sentinel.deploy.runner --feedback <finding_id> trace_20250101_120000.json --rating incorrect --comment "False positive"
 
+# Enable LLM-powered review with RAG context
+python -m sentinel.deploy.runner file.py --llm-api-key sk-... --llm-model gpt-4o-mini
+
+# Persist and reuse RAG knowledge base across reviews
+python -m sentinel.deploy.runner dir/ --llm-api-key sk-... --rag-kb-dir ./kb
+
 # Start the web dashboard
 python -m sentinel.monitor.dashboard --trace-dir ./traces --port 8080
 
@@ -35,81 +41,95 @@ python -m sentinel.test.simulations
 ## Data Flow
 
 ```
-                                ┌─────────────┐
-                                │  CLI / User  │
-                                └──────┬──────┘
-                                       │ paths, flags
-                                       v
-                                ┌──────────────┐
-                                │   runner.py   │
-                                │   load_config │
-                                └──────┬───────┘
-                                       │ FileContext[]
-                                       v
-              ┌───────────────────────────────────────────┐
-              │              Orchestrator                  │
-              │                                            │
-              │  ┌──────────────┐    ┌──────────────────┐  │
-              │  │  CostTracker  │    │     Tracer       │  │
-              │  │  (per-agent)  │    │  (events+metrics)│  │
-              │  └──────┬───────┘    └────────┬─────────┘  │
-              │         │                     │            │
-              │         v                     v            │
-              │  ┌────────────────────────────────────┐    │
-              │  │       ThreadPoolExecutor            │    │
-              │  │  ┌────────┐┌──────┐┌─────┐┌─────┐  │    │
-              │  │  │static- ││secu- ││style││best-│ ...│    │
-              │  │  │analysis││rity  ││     ││prac │  │    │
-              │  │  └───┬────┘└──┬───┘└──┬──┘└──┬──┘  │    │
-              │  └──────┼────────┼───────┼──────┼──────┘    │
-              │         │        │       │      │           │
-              │         v        v       v      v           │
-              │         Finding[] (per agent)               │
-              │                                            │
-              └───────────────────────┬────────────────────┘
-                                      │ AgentResult[]
-                                      v
-                            ┌──────────────────┐
-                            │    SummaryAgent   │
-                            │  (score + verdict)│
-                            └────────┬─────────┘
-                                     │
-                   ┌─────────────────┼─────────────────┐
-                   │                 │                  │
-                   v                 v                  v
-            ┌──────────┐    ┌──────────────┐   ┌──────────────┐
-            │  Report   │    │   Tracer     │   │  CostTracker  │
-            │ (JSON/MD) │    │ (trace files)│   │  (cost line)  │
-            └──────────┘    └──────┬───────┘   └──────────────┘
-                                   │
-                                   v
-                          ┌────────────────────┐
-                          │  feedback_trace_*.json
-                          │  (POST /api/feedback)│
-                          └────────┬───────────┘
-                                   │
-                                   v
-                          ┌────────────────────┐
-                          │  Dashboard (HTML)  │
-                          │  /api/stats        │
-                          │  /api/traces       │
-                          │  /api/feedback     │
-                          └────────────────────┘
+                                 ┌─────────────┐
+                                 │  CLI / User  │
+                                 └──────┬──────┘
+                                        │ paths, flags
+                                        v
+                                 ┌──────────────┐
+                                 │   runner.py   │
+                                 │   load_config │
+                                 └──────┬───────┘
+                                        │ FileContext[]
+                                        v
+               ┌───────────────────────────────────────────┐
+               │              Orchestrator                  │
+               │                                            │
+               │  ┌──────────────┐    ┌──────────────────┐  │
+               │  │  CostTracker  │    │     Tracer       │  │
+               │  │  (per-agent)  │    │  (events+metrics)│  │
+               │  └──────┬───────┘    └────────┬─────────┘  │
+               │         │                     │            │
+               │         v                     v            │
+               │  ┌────────────────────────────────────┐    │
+               │  │       ThreadPoolExecutor            │    │
+               │  │  ┌────────┐┌──────┐┌─────┐┌─────┐  │    │
+               │  │  │static- ││secu- ││style││best-│ ...│    │
+               │  │  │analysis││rity  ││     ││prac │  │    │
+               │  │  └───┬────┘└──┬───┘└──┬──┘└──┬──┘  │    │
+               │  │       │        │       │      │     │    │
+               │  │       v        v       v      v     │    │
+               │  │  ┌─────────────────────────────┐    │    │
+               │  │  │   llm-review (optional)      │    │    │
+               │  │  │   ┌─────────────────┐       │    │    │
+               │  │  │   │   Retriever      │◄─────│────│────│──── RAG KB
+               │  │  │   │  (TF-IDF cos sim)│      │    │    │
+               │  │  │   └────────┬────────┘       │    │    │
+               │  │  │            │ RAG context     │    │    │
+               │  │  │            v                 │    │    │
+               │  │  │   ┌─────────────────┐       │    │    │
+               │  │  │   │   LLM API call   │       │    │    │
+               │  │  │   │ (OpenAI-compat)  │       │    │    │
+               │  │  │   └────────┬────────┘       │    │    │
+               │  │  └────────────┼─────────────────┘    │    │
+               │  └───────────────┼──────────────────────┘    │
+               │                  │ Finding[]                  │
+               └──────────────────┼───────────────────────────┘
+                                 │ AgentResult[]
+                                 v
+                             ┌──────────────────┐
+                             │    SummaryAgent   │
+                             │  (score + verdict)│
+                             └────────┬─────────┘
+                                      │
+                    ┌─────────────────┼─────────────────┐
+                    │                 │                  │
+                    v                 v                  v
+             ┌──────────┐    ┌──────────────┐   ┌──────────────┐
+             │  Report   │    │   Tracer     │   │  CostTracker  │
+             │ (JSON/MD) │    │ (trace files)│   │  (cost line)  │
+             └──────────┘    └──────┬───────┘   └──────────────┘
+                                    │
+                                    v
+                           ┌────────────────────┐
+                           │  feedback_trace_*.json
+                           │  (POST /api/feedback)│
+                           └────────┬───────────┘
+                                    │
+                                    v
+                           ┌────────────────────┐
+                           │  Dashboard (HTML)  │
+                           │  /api/stats        │
+                           │  /api/traces       │
+                           │  /api/feedback     │
+                           └────────────────────┘
 
-► External inputs:  CLI args, --config .code-review.json, --feedback
-► Storage:         trace_*.json, feedback_trace_*.json, .sentinel-profiles/
+► External inputs:  CLI args, --config .code-review.json, --feedback, --llm-api-key
+► Storage:         trace_*.json, feedback_trace_*.json, .sentinel-profiles/, RAG KB (vector_store.json, knowledge_base.json)
 ► Outputs:         stdout (MD/JSON), dashboard (HTTP), trace files
+► Optional:        LLM API (OpenAI-compatible), RAG knowledge base
 ```
 
 ## Agents
 
 | Agent | Rules | Checks |
-|---|---|---|
+|---|---|---|---|
 | **static-analysis** | 9 | Cyclomatic complexity, line length, nesting depth, unused imports, trailing whitespace |
 | **security** | 32 + secret scanner | eval/exec, pickle, SQLi, XSS, SSTI, hardcoded creds, JWT, AWS keys, weak crypto, XXE, and more |
 | **style** | 6 | Import ordering, naming conventions (CapWords/snake_case), docstrings, magic numbers, is-vs-== |
 | **best-practices** | 5 | Bare excepts, lambda assignments, mutable defaults, globals, type hints, context managers |
 | **documentation** | 6 | Module/function/class docstrings, inline comment coverage |
+| **llm-review** | optional | LLM-powered review with RAG context retrieval. Requires `--llm-api-key`. Uses TF-IDF cosine similarity to find similar past findings + sends context to OpenAI-compatible API |
 
 ## ADLC Phases
 
@@ -121,14 +141,18 @@ Agent source code, tools, and orchestration framework.
 
 | Module | Files | Purpose |
 |---|---|---|
-| `sentinel/agents/` | `static_analysis.py`, `security.py`, `style.py`, `best_practices.py`, `documentation.py`, `summary.py` | 6 sub-agents — each has a self-contained `analyze()` method returning `list[Finding]` |
+| `sentinel/agents/` | `static_analysis.py`, `security.py`, `style.py`, `best_practices.py`, `documentation.py`, `summary.py`, `llm_review.py` | 7 sub-agents — each has a self-contained `analyze()` method returning `list[Finding]`. `llm-review` is optional (requires `--llm-api-key`) |
 | `sentinel/core/` | `orchestrator.py`, `base_agent.py`, `context.py`, `types.py` | Orchestrator coordinates agents via two-level parallelism (file-level + agent-level), `BaseAgent` abstract class with `run()` lifecycle, `FileContext`/`ReviewReport`/`Finding` data models |
 | `sentinel/tools/` | `ast_tools.py`, `config.py`, `git_tools.py`, `secrets_scanner.py` | AST complexity analysis, `.code-review.json` config loader, diff parsing, standalone secrets scanner (20+ patterns) |
-| **Design** | | Zero external dependencies (pure stdlib). Agents are stateless and thread-safe. Parallelism via `ThreadPoolExecutor` with separate file and agent pools to avoid deadlock. |
+| `sentinel/rag/` | `vector_store.py`, `knowledge_base.py`, `retriever.py` | TF-IDF vector store (pure Python), code chunking + knowledge base, similarity search + RAG prompt builder |
+| **Design** | | Zero external dependencies (pure stdlib). Agents are stateless and thread-safe. Parallelism via `ThreadPoolExecutor` with separate file and agent pools to avoid deadlock. RAG uses pure Python TF-IDF vector store with cosine similarity — no external vector DB needed. |
 
 ```bash
 # Run a review
 python -m sentinel.deploy.runner path/to/file.py
+
+# Enable LLM + RAG
+python -m sentinel.deploy.runner path/to/file.py --llm-api-key sk-... --rag-kb-dir ./kb
 ```
 
 ### Test
@@ -140,7 +164,7 @@ Regression datasets, eval suite, simulation engine, and unit tests.
 | **Eval datasets** | `sentinel/test/fixtures/good_code.py`, `bad_code.py` | Known-good (4 findings) and known-bad (89 findings) fixtures for regression testing |
 | **Eval runner** | `sentinel/test/evals.py` | Scores 100% when both datasets match expected finding counts |
 | **Simulation engine** | `sentinel/test/simulations.py` | 3 multi-turn scenarios (bad→good, no-regression, severity improves), 6/6 steps |
-| **Unit tests** | `tests/test_*.py` (14 files) | 268 tests covering all agents, tools, orchestrator, cost tracker, tracer, dashboard, context hub, registry |
+| **Unit tests** | `tests/test_*.py` (15 files) | 371 tests covering all agents, tools, orchestrator, cost tracker, tracer, dashboard, context hub, registry, RAG |
 
 ```bash
 python -m sentinel.test.evals
@@ -154,7 +178,7 @@ CLI entry point and infrastructure for versioned configuration.
 
 | Component | Files | Purpose |
 |---|---|---|
-| **CLI runner** | `sentinel/deploy/runner.py` | `main()` entry point — parses args, loads config, runs orchestrator, writes output. Supports `--format`, `--output`, `--disable-agent`, `--trace-dir`, `--verbose`, `--config`, `--cost-cap`, `--feedback`, `--workers` |
+| **CLI runner** | `sentinel/deploy/runner.py` | `main()` entry point — parses args, loads config, runs orchestrator, writes output. Supports `--format`, `--output`, `--disable-agent`, `--trace-dir`, `--verbose`, `--config`, `--cost-cap`, `--feedback`, `--workers`, `--llm-api-key`, `--llm-model`, `--rag-kb-dir` |
 | **Context Hub** | `sentinel/govern/context_hub.py` | Versioned named profiles — `get/set/delete` with SHA-256 version tracking per entry, stored as JSON files |
 | **Config** | `.code-review.json` | Thresholds (complexity 80, nesting 8, function length 80, params 12), suppress rules with fnmatch on rule_id/file, per-agent thresholds |
 
@@ -162,6 +186,7 @@ CLI entry point and infrastructure for versioned configuration.
 python -m sentinel.deploy.runner dir/ --workers 4 --format json -o report.json
 python -m sentinel.deploy.runner file.py --disable-agent security
 python -m sentinel.deploy.runner file.py --trace-dir ./traces --cost-cap 0.05
+python -m sentinel.deploy.runner file.py --llm-api-key sk-... --rag-kb-dir ./kb
 ```
 
 ### Monitor
@@ -186,7 +211,7 @@ Cost governance, agent registry, and policy enforcement.
 | Component | Files | Purpose |
 |---|---|---|
 | **CostTracker** | `sentinel/govern/cost.py` | Per-agent cost rates (static agents cost $0, LLM agents configurable), cost caps via `--cost-cap`, summary line in report. Thread-safe with reentrant lock |
-| **AgentRegistry** | `sentinel/govern/registry.py` | `AgentRegistry.default()` registers all 6 agents with config schemas, `list_agents()`, `find_by_tag()`, `find_by_capability()`, discovery metadata |
+| **AgentRegistry** | `sentinel/govern/registry.py` | `AgentRegistry.default()` registers all 7 agents with config schemas, `list_agents()`, `find_by_tag()`, `find_by_capability()`, discovery metadata |
 | **Suppress rules** | `.code-review.json` + `runner.py` | fnmatch-based suppression on `rule_id` + `file` pattern, applied after review via `suppress_findings()` |
 | **Audit** | Trace files + tracer | Every `run.started`/`run.completed`/`review.completed` event logged with duration, finding count, cost, errors — full JSON audit trail |
 

@@ -71,7 +71,14 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--disable-agent",
         action="append",
-        choices=["static-analysis", "security", "style", "best-practices", "documentation"],
+        choices=[
+            "static-analysis",
+            "security",
+            "style",
+            "best-practices",
+            "documentation",
+            "llm-review",
+        ],
         help="Disable a specific agent sub-agent",
     )
     parser.add_argument(
@@ -121,10 +128,26 @@ def create_parser() -> argparse.ArgumentParser:
         type=float,
         help="Maximum cost cap (in dollars) before review is halted",
     )
+    parser.add_argument(
+        "--llm-api-key",
+        type=str,
+        help="API key for LLM review agent (enables LLM-powered review)",
+    )
+    parser.add_argument(
+        "--llm-model",
+        type=str,
+        default="gpt-4o-mini",
+        help="LLM model name (default: gpt-4o-mini)",
+    )
+    parser.add_argument(
+        "--rag-kb-dir",
+        type=str,
+        help="Directory for RAG knowledge base persistence",
+    )
     return parser
 
 
-def _setup_agents(cfg: dict, disabled: set[str]) -> list:
+def _setup_agents(cfg: dict, disabled: set[str], args: argparse.Namespace | None = None) -> list:
     from ..agents.best_practices import BestPracticesAgent
     from ..agents.documentation import DocumentationAgent
     from ..agents.security import SecurityAgent
@@ -132,7 +155,7 @@ def _setup_agents(cfg: dict, disabled: set[str]) -> list:
     from ..agents.style import StyleAgent
 
     sa_cfg = agent_config(cfg, "static-analysis")
-    return [
+    agents = [
         StaticAnalysisAgent(
             enabled="static-analysis" not in disabled,
             complexity_threshold=sa_cfg.get("complexity_threshold", 25),
@@ -146,6 +169,36 @@ def _setup_agents(cfg: dict, disabled: set[str]) -> list:
         BestPracticesAgent(enabled="best-practices" not in disabled),
         DocumentationAgent(enabled="documentation" not in disabled),
     ]
+
+    if args and not args.llm_api_key:
+        args.llm_api_key = cfg.get("llm_api_key", "")
+
+    if args and args.llm_api_key and "llm-review" not in disabled:
+        from ..agents.llm_review import LlmReviewAgent
+
+        retriever = None
+        if args.rag_kb_dir:
+            from ..rag.knowledge_base import KnowledgeBase
+            from ..rag.retriever import Retriever
+
+            kb_path = Path(args.rag_kb_dir)
+            vector_store_path = kb_path / "vector_store.json"
+            kb_data_path = kb_path / "knowledge_base.json"
+            if vector_store_path.exists() and kb_data_path.exists():
+                kb = KnowledgeBase.load(kb_path)
+            else:
+                kb = KnowledgeBase()
+            retriever = Retriever(kb)
+
+        llm_agent = LlmReviewAgent(
+            api_key=args.llm_api_key,
+            model=args.llm_model or "gpt-4o-mini",
+            retriever=retriever,
+            rag_top_k=agent_config(cfg, "llm-review").get("rag_top_k", 3),
+        )
+        agents.append(llm_agent)  # type: ignore
+
+    return agents
 
 
 def _print_trace_summary(tracer: Tracer) -> None:
@@ -199,7 +252,7 @@ def main(argv: list[str] | None = None) -> int:
 
     tracer = Tracer(log_dir=args.trace_dir, enabled=True)
     cost_tracker = CostTracker(cost_cap=args.cost_cap)
-    agents = _setup_agents(cfg, set(args.disable_agent or []))
+    agents = _setup_agents(cfg, set(args.disable_agent or []), args)
     orchestrator = Orchestrator(
         agents=agents, tracer=tracer, cost_tracker=cost_tracker, max_workers=args.workers
     )

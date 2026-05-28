@@ -15,7 +15,12 @@ sentinel/
 │   ├── style.py            # Import order, naming conventions, docstrings, magic numbers
 │   ├── best_practices.py   # Bare excepts, mutable defaults, globals, type hints, context mgrs
 │   ├── documentation.py    # Module/function/class docstrings, comment coverage
+│   ├── llm_review.py       # Optional LLM-powered review with RAG context retrieval
 │   └── summary.py          # Compiles final verdict, severity breakdown, cost summary
+├── rag/
+│   ├── vector_store.py     # TF-IDF vector store + cosine similarity (pure Python)
+│   ├── knowledge_base.py   # Code chunking, CRUD for findings, JSON persistence
+│   └── retriever.py        # Similarity search + RAG prompt builder for agents
 ├── tools/
 │   ├── ast_tools.py        # AST-based complexity, function length, unused import detection
 │   ├── config.py           # .code-review.json loader with filter/suppress/matches helpers
@@ -37,18 +42,18 @@ sentinel/
 │       ├── good_code.py    # Known-good eval dataset
 │       └── bad_code.py     # Known-bad eval dataset (89 findings across all agents)
 └── deploy/
-    └── runner.py           # CLI entry point with review + feedback submission
+    └── runner.py           # CLI entry point with review + feedback + LLM submission
 ```
 
 ## ADLC Phase Mapping
 
 | ADLC Phase | Implementation | Status |
 |---|---|---|
-| **Build** | 5 sub-agents + documentation agent, orchestrator, tools, base framework | ✅ Complete |
-| **Test** | `test/evals.py` (2 fixtures, 100% score), `test/simulations.py` (3 scenarios, 6/6 steps), 264 unit tests | ✅ Complete (multi-turn sims added) |
-| **Deploy** | `deploy/runner.py` CLI with `--format`, `--output`, `--disable-agent`, `--trace-dir`, `--config`, `--cost-cap`, `--feedback`; `govern/context_hub.py` for versioned profiles | ✅ Complete (context hub added) |
+| **Build** | 7 sub-agents (static-analysis, security, style, best-practices, documentation, llm-review, summary) + RAG (TF-IDF vector store, knowledge base, retriever) + orchestrator + tools | ✅ Complete (RAG added) |
+| **Test** | `test/evals.py` (2 fixtures, 100% score), `test/simulations.py` (3 scenarios, 6/6 steps), 371 unit tests | ✅ Complete (RAG tests added) |
+| **Deploy** | `deploy/runner.py` CLI with `--format`, `--output`, `--disable-agent`, `--trace-dir`, `--config`, `--cost-cap`, `--feedback`, `--workers`, `--llm-api-key`, `--llm-model`, `--rag-kb-dir`; `govern/context_hub.py` for versioned profiles | ✅ Complete (LLM + RAG flags added) |
 | **Monitor** | `monitor/tracer.py` captures trace events + metrics + feedbacks; `monitor/dashboard.py` HTML/JSON dashboard with `/api/feedback` POST endpoint | ✅ Complete (feedback pipeline added) |
-| **Govern** | `--disable-agent`, `suppress` rules, severity-weighted scoring, JSON audit trails; `govern/cost.py` cost caps; `govern/registry.py` agent discoverability | ✅ Complete (cost + registry added) |
+| **Govern** | `--disable-agent`, `suppress` rules, severity-weighted scoring, JSON audit trails; `govern/cost.py` cost caps; `govern/registry.py` agent discoverability (7 agents) | ✅ Complete (cost + registry added) |
 
 ## CLI Usage
 
@@ -79,6 +84,12 @@ python -m sentinel.deploy.runner path/to/file.py -o report.md
 
 # Submit feedback for a finding (flag as correct/incorrect)
 python -m sentinel.deploy.runner --feedback <finding_id> trace_20250101_120000.json --rating incorrect --comment "False positive"
+
+# Enable LLM-powered review with RAG context
+python -m sentinel.deploy.runner path/to/file.py --llm-api-key sk-... --llm-model gpt-4o-mini
+
+# Persist and reuse RAG knowledge base
+python -m sentinel.deploy.runner path/to/dir/ --llm-api-key sk-... --rag-kb-dir ./kb
 
 # Dashboard
 python -m sentinel.monitor.dashboard --port 8080 --trace-dir ./traces
@@ -124,7 +135,7 @@ git config core.hooksPath .githooks
 SKIP=lint,format,ty,secrets,coverage git commit -m "skip all hooks"
 ```
 
-Expected: 100% on both good_code and bad_code fixtures, **264 tests passing**, 3/3 simulation scenarios passing, 85%+ coverage, zero ruff/ty errors.
+Expected: 100% on both good_code and bad_code fixtures, **371 tests passing**, 3/3 simulation scenarios passing, 85%+ coverage, zero ruff/ty errors.
 
 ## ADLC Gaps (All Resolved)
 
@@ -134,7 +145,9 @@ Expected: 100% on both good_code and bad_code fixtures, **264 tests passing**, 3
 | **Simulation Engine** (Test) | `sentinel/test/simulations.py` with 3 scenarios (bad→good, no regression, severity improves), 6/6 steps passing |
 | **Cost Governance** (Govern) | `sentinel/govern/cost.py` — `CostTracker` with per-agent rates, cost caps, summary in report |
 | **Context Hub** (Deploy) | `sentinel/govern/context_hub.py` — versioned named profiles with get/set/delete, SHA-256 version tracking |
-| **Agent Registry** (Govern) | `sentinel/govern/registry.py` — `AgentRegistry.default()` with 6 agents, config schemas, tag/capability search |
+| **Agent Registry** (Govern) | `sentinel/govern/registry.py` — `AgentRegistry.default()` with 7 agents, config schemas, tag/capability search |
+| **RAG Knowledge Base** (Build) | `sentinel/rag/vector_store.py` (TF-IDF), `knowledge_base.py` (chunking + persistence), `retriever.py` (similarity search) |
+| **LLM Review Agent** (Build) | `sentinel/agents/llm_review.py` — optional OpenAI-compatible agent with RAG context, wired via `--llm-api-key` |
 
 ## Key Design Decisions
 
@@ -149,3 +162,6 @@ Expected: 100% on both good_code and bad_code fixtures, **264 tests passing**, 3
 - **Eval datasets mirror production** — good_code and bad_code fixtures serve as regression dataset per the ADLC article: *"Datasets are how teams preserve what they learn."*
 - **Suppress rules** support fnmatch wildcards on both `rule` and `pattern` fields in `.code-review.json`.
 - **Parallel processing** — `--workers N` runs agents concurrently via `ThreadPoolExecutor`. Agents are stateless and thread-safe. Falls back to sequential when `max_workers` is `None`. Best suited when agents perform I/O or release the GIL (regex/AST parsing).
+- **RAG is pure Python** — TF-IDF vector store with cosine similarity, no external dependencies. Knowledge base persists as JSON files under `--rag-kb-dir`.
+- **LLM agent is optional** — skipped entirely when `--llm-api-key` is not provided. Zero overhead when not in use.
+- **Secrets scanner skips test files** in pre-commit hook to avoid false positives on fake API keys in tests.
