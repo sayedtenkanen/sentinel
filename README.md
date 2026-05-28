@@ -127,7 +127,7 @@ python -m sentinel.test.simulations
 ## Agents
 
 | Agent | Rules | Checks |
-|---|---|---|---|
+|---|---|---|
 | **static-analysis** | 9 | Cyclomatic complexity, line length, nesting depth, unused imports, trailing whitespace |
 | **security** | 32 + secret scanner | eval/exec, pickle, SQLi, XSS, SSTI, hardcoded creds, JWT, AWS keys, weak crypto, XXE, and more |
 | **style** | 6 | Import ordering, naming conventions (CapWords/snake_case), docstrings, magic numbers, is-vs-== |
