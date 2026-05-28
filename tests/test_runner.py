@@ -1,5 +1,7 @@
 """Unit tests for the CLI runner."""
 
+import contextlib
+import io
 import json
 import os
 import tempfile
@@ -138,6 +140,68 @@ class TestRunnerMain(unittest.TestCase):
                 self.assertGreater(len(files), 0)
             finally:
                 os.unlink(src)
+
+    def test_main_with_verbose(self):
+        with tempfile.NamedTemporaryFile(suffix=".py", mode="w", delete=False) as f:
+            f.write("x = 1\n")
+            path = f.name
+        try:
+            with contextlib.redirect_stderr(io.StringIO()):
+                exit_code = main([path, "-v"])
+            self.assertEqual(exit_code, 0)
+        finally:
+            os.unlink(path)
+
+    def test_main_verbose_with_output_file(self):
+        with tempfile.NamedTemporaryFile(suffix=".py", mode="w", delete=False) as f:
+            f.write("x = 1\n")
+            src = f.name
+        out_path = src + ".out.md"
+        try:
+            with contextlib.redirect_stderr(io.StringIO()):
+                exit_code = main([src, "-v", "-o", out_path])
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(os.path.exists(out_path))
+        finally:
+            os.unlink(src)
+            if os.path.exists(out_path):
+                os.unlink(out_path)
+
+    def test_main_verbose_with_trace_dir(self):
+        with tempfile.NamedTemporaryFile(suffix=".py", mode="w", delete=False) as f:
+            f.write("x = 1\n")
+            src = f.name
+        with tempfile.TemporaryDirectory() as trace_dir:
+            try:
+                with contextlib.redirect_stderr(io.StringIO()):
+                    exit_code = main([src, "-v", "--trace-dir", trace_dir])
+                self.assertEqual(exit_code, 0)
+                self.assertGreater(len(os.listdir(trace_dir)), 0)
+            finally:
+                os.unlink(src)
+
+    def test_main_with_feedback(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                contextlib.redirect_stderr(io.StringIO()),
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                exit_code = main(
+                    [
+                        "--feedback",
+                        "finding123",
+                        "trace_001.json",
+                        "--rating",
+                        "correct",
+                        "--comment",
+                        "Looks good",
+                        "--trace-dir",
+                        tmpdir,
+                    ]
+                )
+            self.assertEqual(exit_code, 0)
+            feedback_files = [f for f in os.listdir(tmpdir) if f.startswith("feedback_")]
+            self.assertGreater(len(feedback_files), 0)
 
 
 if __name__ == "__main__":

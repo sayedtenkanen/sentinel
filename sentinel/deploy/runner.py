@@ -43,7 +43,7 @@ def create_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "paths",
-        nargs="+",
+        nargs="*",
         help="Files or directories to review",
     )
     parser.add_argument(
