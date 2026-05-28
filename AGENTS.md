@@ -91,6 +91,10 @@ python -m sentinel.deploy.runner path/to/file.py --llm-api-key sk-... --llm-mode
 # Persist and reuse RAG knowledge base
 python -m sentinel.deploy.runner path/to/dir/ --llm-api-key sk-... --rag-kb-dir ./kb
 
+# LLM key can also be set via env vars (no flag needed):
+#   export SENTINEL_LLM_API_KEY=sk-...
+#   export SENTINEL_LLM_MODEL=gpt-4o-mini
+
 # Dashboard
 python -m sentinel.monitor.dashboard --port 8080 --trace-dir ./traces
 
