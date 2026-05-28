@@ -31,10 +31,6 @@ python -m sentinel.deploy.runner file.py --llm-api-key sk-... --llm-model gpt-4o
 # Persist and reuse RAG knowledge base across reviews
 python -m sentinel.deploy.runner dir/ --llm-api-key sk-... --rag-kb-dir ./kb
 
-# LLM key can also be set via env vars (no flag needed):
-#   export SENTINEL_LLM_API_KEY=sk-...
-#   export SENTINEL_LLM_MODEL=gpt-4o-mini
-
 # Start the web dashboard
 python -m sentinel.monitor.dashboard --trace-dir ./traces --port 8080
 
