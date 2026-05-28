@@ -81,15 +81,18 @@ class KnowledgeBase:
             if not related:
                 related = findings
             for finding in related:
-                finding["_source_file"] = file_path
-                finding["_chunk_lines"] = f"{start}-{end}"
-                self.add_finding(chunk_text, finding, file_path)
+                enriched = {
+                    **finding,
+                    "_source_file": file_path,
+                    "_chunk_lines": f"{start}-{end}",
+                }
+                self.add_finding(chunk_text, enriched, file_path)
                 count += 1
         return count
 
     def save(self, path):
         p = Path(path)
-        p.parent.mkdir(parents=True, exist_ok=True)
+        p.mkdir(parents=True, exist_ok=True)
         self.store.save(p / "vector_store.json")
         kb_data = {
             "findings": self.findings,
@@ -102,7 +105,9 @@ class KnowledgeBase:
         p = Path(path)
         store = TfidfVectorStore.load(p / "vector_store.json")
         kb = cls(store=store)
-        kb_data = json.loads((p / "knowledge_base.json").read_text())
-        kb.findings = kb_data.get("findings", {})
-        kb.chunk_map = kb_data.get("chunk_map", {})
+        kb_data_path = p / "knowledge_base.json"
+        if kb_data_path.exists():
+            kb_data = json.loads(kb_data_path.read_text())
+            kb.findings = kb_data.get("findings", {})
+            kb.chunk_map = kb_data.get("chunk_map", {})
         return kb

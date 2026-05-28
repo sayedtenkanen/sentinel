@@ -13,7 +13,6 @@ from ..agents.style import StyleAgent
 from ..agents.summary import SummaryAgent
 from ..govern.cost import CostTracker
 from ..monitor.tracer import Tracer
-from ..rag.retriever import Retriever
 from .base_agent import BaseAgent
 from .context import ReviewContext
 from .types import (
@@ -46,10 +45,6 @@ class Orchestrator:
         self.tracer = tracer or Tracer()
         self.cost_tracker = cost_tracker or CostTracker()
         self.max_workers = max_workers
-        self.retriever: Retriever | None = None
-
-    def set_retriever(self, retriever: Retriever | None) -> None:
-        self.retriever = retriever
 
     def review(self, context: ReviewContext) -> ReviewReport:
         """Run all agents on all files in the context.

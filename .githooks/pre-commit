@@ -7,6 +7,7 @@ Skip:     SKIP=lint,format,ty,secrets,coverage git commit
 """
 
 import os
+import shlex
 import subprocess
 import sys
 
@@ -93,7 +94,7 @@ def run_secrets_scan(files: list[str]) -> bool:
 
     result = subprocess.run(
         [sys.executable, "-m", "sentinel.tools.secrets_scanner"]
-        + non_test_files
+        + [shlex.escape(f) for f in non_test_files]
         + ["--exit-zero"],
         capture_output=True, text=True, cwd=PROJECT_DIR,
     )

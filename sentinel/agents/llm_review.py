@@ -9,11 +9,12 @@ class LlmReviewAgent(BaseAgent):
     name = "llm-review"
     description = "Optional LLM-powered review using RAG context"
 
-    def __init__(self, api_key="", model="", retriever=None):
+    def __init__(self, api_key="", model="", retriever=None, rag_top_k=3):
         super().__init__(name=self.name)
         self.api_key = api_key or os.environ.get("SENTINEL_LLM_API_KEY", "")
         self.model = model or os.environ.get("SENTINEL_LLM_MODEL", "gpt-4o-mini")
         self.retriever = retriever
+        self.rag_top_k = rag_top_k
 
     def _check_available(self):
         return bool(self.api_key)
@@ -29,7 +30,7 @@ class LlmReviewAgent(BaseAgent):
         try:
             context_snippets = []
             if self.retriever:
-                results = self.retriever.retrieve_context(source, top_k=3)
+                results = self.retriever.retrieve_context(source, top_k=self.rag_top_k)
                 context_snippets = results
 
             prompt = self._build_prompt(source, context_snippets, file_path)
@@ -37,19 +38,35 @@ class LlmReviewAgent(BaseAgent):
             parsed = self._parse_response(response)
 
             for finding_data in parsed:
+                raw_severity = finding_data.get("severity", "info")
+                try:
+                    severity = Severity(str(raw_severity).lower())
+                except ValueError:
+                    severity = Severity.INFO
+
                 findings.append(
                     Finding(
                         file=file_path,
                         line=finding_data.get("line", 1),
                         column=0,
-                        severity=Severity(finding_data.get("severity", "info").lower()),
+                        severity=severity,
                         rule_id=finding_data.get("rule_id", "LLM001"),
                         message=finding_data.get("message", ""),
                         suggestion=finding_data.get("suggestion", ""),
                     )
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            findings.append(
+                Finding(
+                    file=file_path,
+                    line=1,
+                    column=0,
+                    severity=Severity.INFO,
+                    rule_id="LLM999",
+                    message=f"LLM review failed: {exc}",
+                    suggestion="Check API key, model name, and network connectivity",
+                )
+            )
 
         return findings
 

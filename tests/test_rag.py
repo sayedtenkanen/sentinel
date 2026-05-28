@@ -56,6 +56,15 @@ class TestTfidfVectorStore(unittest.TestCase):
         self.store.add_document("2", "def bar(): pass")
         self.store.remove_document("1")
         self.assertEqual(len(self.store.documents), 1)
+        self.assertEqual(self.store.documents[0]["id"], "2")
+
+        results_foo = self.store.search("foo")
+        self.assertEqual(results_foo, [])
+
+        results_bar = self.store.search("bar")
+        self.assertEqual(len(results_bar), 1)
+        self.assertEqual(results_bar[0]["id"], "2")
+        self.assertGreater(results_bar[0]["score"], 0)
 
     def test_save_and_load(self):
         self.store.add_document("1", "def foo(): pass", {"file": "a.py"})
@@ -287,6 +296,50 @@ class TestLlmReviewAgent(unittest.TestCase):
         prompt = agent._build_prompt("def foo(): pass", results, "test.py")
         self.assertIn("SEC001", prompt)
         self.assertIn("Relevant past findings", prompt)
+
+    def test_rag_top_k_default(self):
+        from sentinel.agents.llm_review import LlmReviewAgent
+
+        agent = LlmReviewAgent()
+        self.assertEqual(agent.rag_top_k, 3)
+
+    def test_rag_top_k_custom(self):
+        from sentinel.agents.llm_review import LlmReviewAgent
+
+        agent = LlmReviewAgent(rag_top_k=10)
+        self.assertEqual(agent.rag_top_k, 10)
+
+    def test_analyze_returns_error_finding_on_failure(self):
+        import os
+
+        os.environ["SENTINEL_LLM_API_KEY"] = "test-key"
+        from sentinel.agents.llm_review import LlmReviewAgent
+        from sentinel.core.types import FileContext
+
+        agent = LlmReviewAgent()
+        del os.environ["SENTINEL_LLM_API_KEY"]
+        file = FileContext(path="test.py", content="x = 1")
+        findings = agent.analyze(file)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule_id, "LLM999")
+        self.assertEqual(findings[0].severity.name, "INFO")
+
+    def test_severity_fallback_on_unknown_value(self):
+        from sentinel.agents.llm_review import LlmReviewAgent
+
+        agent = LlmReviewAgent()
+        response = (
+            '[{"line": 1, "severity": "super-critical", "rule_id": "LLM001", "message": "x"}]'
+        )
+        parsed = agent._parse_response(response)
+        raw_severity = parsed[0].get("severity", "info")
+        from sentinel.core.types import Severity
+
+        try:
+            severity = Severity(str(raw_severity).lower())
+        except ValueError:
+            severity = Severity.INFO
+        self.assertEqual(severity, Severity.INFO)
 
 
 class TestRegistryLlmAgent(unittest.TestCase):

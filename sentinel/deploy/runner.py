@@ -182,7 +182,9 @@ def _setup_agents(cfg: dict, disabled: set[str], args: argparse.Namespace | None
             from ..rag.retriever import Retriever
 
             kb_path = Path(args.rag_kb_dir)
-            if (kb_path / "vector_store.json").exists():
+            vector_store_path = kb_path / "vector_store.json"
+            kb_data_path = kb_path / "knowledge_base.json"
+            if vector_store_path.exists() and kb_data_path.exists():
                 kb = KnowledgeBase.load(kb_path)
             else:
                 kb = KnowledgeBase()
@@ -192,6 +194,7 @@ def _setup_agents(cfg: dict, disabled: set[str], args: argparse.Namespace | None
             api_key=args.llm_api_key,
             model=args.llm_model or "gpt-4o-mini",
             retriever=retriever,
+            rag_top_k=agent_config(cfg, "llm-review").get("rag_top_k", 3),
         )
         agents.append(llm_agent)  # type: ignore
 
