@@ -11,7 +11,9 @@
         {"rule": "ST003", "pattern": "**/dashboard.py"},
         {"rule": "ST003", "pattern": "**/registry.py"},
         {"rule": "ST005", "pattern": "*"},
-        {"rule": "ST009", "pattern": "**/context_hub.py"}
+        {"rule": "ST009", "pattern": "**/context_hub.py"},
+        {"rule": "DOC006", "pattern": "*"},
+        {"rule": "ST001", "pattern": "**/dashboard.py"}
     ],
     "agents": {
         "static-analysis": {

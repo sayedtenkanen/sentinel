@@ -38,6 +38,7 @@ STDLIB_MODULES = {
     "time",
     "ast",
     "concurrent",
+    "http",
 }
 
 
