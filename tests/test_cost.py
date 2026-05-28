@@ -138,6 +138,28 @@ class TestCostTracker(unittest.TestCase):
         self.assertEqual(len(errors), 0)
         self.assertAlmostEqual(t.total_cost, 40 * 0.001, places=6)
 
+    def test_concurrent_cap_exceeded(self):
+        import threading
+
+        t = CostTracker(cost_cap=0.01)
+        errors = []
+        results = []
+
+        def worker(name):
+            try:
+                t.track(name, 100.0, 0.001)
+                results.append(t.cap_exceeded)
+            except Exception as e:
+                errors.append(str(e))
+
+        threads = [threading.Thread(target=worker, args=(f"agent-{i}",)) for i in range(4)]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join()
+        self.assertEqual(len(errors), 0)
+        self.assertTrue(any(results))
+
 
 if __name__ == "__main__":
     unittest.main()

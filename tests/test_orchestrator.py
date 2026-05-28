@@ -3,9 +3,10 @@
 import unittest
 
 from sentinel.agents.static_analysis import StaticAnalysisAgent
+from sentinel.core.base_agent import BaseAgent
 from sentinel.core.context import ReviewContext
 from sentinel.core.orchestrator import Orchestrator
-from sentinel.core.types import FileContext
+from sentinel.core.types import AgentStatus, FileContext
 from sentinel.monitor.tracer import Tracer
 
 
@@ -132,6 +133,53 @@ eval("os.system('ls')")
         names = [r.agent_name for r in report.agent_results]
         expected = ["static-analysis", "security", "style", "best-practices", "documentation"]
         self.assertEqual(names, expected)
+
+    def test_parallel_multi_file_ordering(self):
+        orch = Orchestrator(max_workers=4)
+        files = [
+            FileContext(path="a.py", content="x = 1"),
+            FileContext(path="b.py", content="y = 2"),
+        ]
+        ctx = ReviewContext(files=files)
+        report = orch.review(ctx)
+        expected = ["static-analysis", "security", "style", "best-practices", "documentation"]
+        names_a = [r.agent_name for r in report.agent_results[:5]]
+        names_b = [r.agent_name for r in report.agent_results[5:]]
+        self.assertEqual(names_a, expected)
+        self.assertEqual(names_b, expected)
+
+
+class CrashingAgent(BaseAgent):
+    def __init__(self):
+        super().__init__(name="crashing")
+
+    def analyze(self, file):
+        return []
+
+    def run(self, file):
+        raise RuntimeError("simulated agent crash")
+
+
+class TestOrchestratorFailure(unittest.TestCase):
+    def test_sequential_agent_crash_caught(self):
+        orch = Orchestrator(agents=[CrashingAgent()])
+        ctx = ReviewContext.from_file("test.py", "x = 1")
+        report = orch.review(ctx)
+        self.assertEqual(len(report.agent_results), 1)
+        self.assertEqual(report.agent_results[0].agent_name, "crashing")
+        self.assertEqual(report.agent_results[0].status, AgentStatus.FAILED)
+        self.assertIn("simulated agent crash", report.agent_results[0].error or "")
+
+    def test_parallel_agent_crash_caught(self):
+        orch = Orchestrator(agents=[StaticAnalysisAgent(), CrashingAgent()], max_workers=2)
+        ctx = ReviewContext.from_file("test.py", "x = 1")
+        report = orch.review(ctx)
+        self.assertEqual(len(report.agent_results), 2)
+        self.assertEqual(report.agent_results[0].agent_name, "static-analysis")
+        self.assertEqual(report.agent_results[0].status, AgentStatus.COMPLETED)
+        self.assertEqual(report.agent_results[1].agent_name, "crashing")
+        self.assertEqual(report.agent_results[1].status, AgentStatus.FAILED)
+        self.assertIn("simulated agent crash", report.agent_results[1].error or "")
 
 
 if __name__ == "__main__":
