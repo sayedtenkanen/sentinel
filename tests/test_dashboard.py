@@ -114,8 +114,18 @@ class TestSummarizeTrace(unittest.TestCase):
     def test_accumulates_agent_totals(self):
         trace = {
             "events": [
-                {"agent": "style", "duration_ms": 10.0, "event": "review.completed", "metadata": {"findings": 3}},
-                {"agent": "security", "duration_ms": 20.0, "event": "agent.completed", "metadata": {}},
+                {
+                    "agent": "style",
+                    "duration_ms": 10.0,
+                    "event": "review.completed",
+                    "metadata": {"findings": 3},
+                },
+                {
+                    "agent": "security",
+                    "duration_ms": 20.0,
+                    "event": "agent.completed",
+                    "metadata": {},
+                },
                 {"agent": "style", "duration_ms": 5.0, "event": "agent.started", "metadata": {}},
             ]
         }
@@ -154,14 +164,24 @@ class TestBuildSummaryStats(unittest.TestCase):
                 "_filename": "trace_a.json",
                 "_filetime": "2025-01-01",
                 "events": [
-                    {"agent": "style", "duration_ms": 10.0, "event": "review.completed", "metadata": {"findings": 2}},
+                    {
+                        "agent": "style",
+                        "duration_ms": 10.0,
+                        "event": "review.completed",
+                        "metadata": {"findings": 2},
+                    },
                 ],
             },
             {
                 "_filename": "trace_b.json",
                 "_filetime": "2025-01-02",
                 "events": [
-                    {"agent": "security", "duration_ms": 5.0, "event": "review.completed", "metadata": {"findings": 0}},
+                    {
+                        "agent": "security",
+                        "duration_ms": 5.0,
+                        "event": "review.completed",
+                        "metadata": {"findings": 0},
+                    },
                 ],
             },
         ]
@@ -176,7 +196,9 @@ class TestBuildSummaryStats(unittest.TestCase):
         self.assertEqual(len(stats["recent_traces"]), 2)
 
     def test_recent_traces_limited_to_20(self):
-        traces = [{"_filename": f"trace_{i}.json", "_filetime": "", "events": []} for i in range(25)]
+        traces = [
+            {"_filename": f"trace_{i}.json", "_filetime": "", "events": []} for i in range(25)
+        ]
         stats = build_summary_stats(traces)
         self.assertEqual(len(stats["recent_traces"]), 20)
 
@@ -248,7 +270,9 @@ class TestDashboardConfig(unittest.TestCase):
         self.assertFalse(cfg.open_browser)
 
     def test_from_args_parses_flags(self):
-        cfg = DashboardConfig.from_args(["--port", "9090", "--host", "0.0.0.0", "--trace-dir", "/tmp/traces", "--open"])
+        cfg = DashboardConfig.from_args(
+            ["--port", "9090", "--host", "0.0.0.0", "--trace-dir", "/tmp/traces", "--open"]
+        )
         self.assertEqual(cfg.port, 9090)
         self.assertEqual(cfg.host, "0.0.0.0")
         self.assertEqual(cfg.trace_dir, "/tmp/traces")
@@ -318,12 +342,14 @@ class TestDashboardHandler(unittest.TestCase):
     def test_do_post_feedback(self):
         handler = self._make_handler("/api/feedback", "POST")
         handler.headers = {"Content-Length": "50"}
-        handler.rfile.read.return_value = json.dumps({
-            "trace_file": "test.json",
-            "finding_id": "SEC001",
-            "rating": "correct",
-            "comment": "good",
-        }).encode()
+        handler.rfile.read.return_value = json.dumps(
+            {
+                "trace_file": "test.json",
+                "finding_id": "SEC001",
+                "rating": "correct",
+                "comment": "good",
+            }
+        ).encode()
         handler.do_POST()
         handler.send_response.assert_called_once_with(200)
         sent_data = json.loads(handler.wfile.write.call_args[0][0])
@@ -335,11 +361,13 @@ class TestDashboardHandler(unittest.TestCase):
             json.dump([{"finding_id": "old", "rating": "incorrect"}], f)
         handler = self._make_handler("/api/feedback", "POST")
         handler.headers = {"Content-Length": "50"}
-        handler.rfile.read.return_value = json.dumps({
-            "trace_file": "test.json",
-            "finding_id": "new",
-            "rating": "correct",
-        }).encode()
+        handler.rfile.read.return_value = json.dumps(
+            {
+                "trace_file": "test.json",
+                "finding_id": "new",
+                "rating": "correct",
+            }
+        ).encode()
         handler.do_POST()
         sent_data = json.loads(handler.wfile.write.call_args[0][0])
         self.assertEqual(sent_data["status"], "ok")
@@ -351,11 +379,13 @@ class TestDashboardHandler(unittest.TestCase):
             json.dump({"finding_id": "old", "rating": "incorrect"}, f)
         handler = self._make_handler("/api/feedback", "POST")
         handler.headers = {"Content-Length": "50"}
-        handler.rfile.read.return_value = json.dumps({
-            "trace_file": "test.json",
-            "finding_id": "new",
-            "rating": "correct",
-        }).encode()
+        handler.rfile.read.return_value = json.dumps(
+            {
+                "trace_file": "test.json",
+                "finding_id": "new",
+                "rating": "correct",
+            }
+        ).encode()
         handler.do_POST()
         sent_data = json.loads(handler.wfile.write.call_args[0][0])
         self.assertEqual(sent_data["status"], "ok")
