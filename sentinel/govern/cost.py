@@ -6,6 +6,7 @@ Supports cost tracking for both static analysis (free) and LLM-based agents
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass, field
 
 DEFAULT_COST_RATES: dict[str, float] = {
@@ -85,31 +86,37 @@ class CostTracker:
         if custom_rates:
             self._rates.update(custom_rates)
         self._report = CostReport()
+        self._lock = threading.RLock()
 
     @property
     def report(self) -> CostReport:
-        return self._report
+        with self._lock:
+            return self._report
 
     @property
     def total_cost(self) -> float:
-        return self._report.total_cost
+        with self._lock:
+            return self._report.total_cost
 
     @property
     def cap_exceeded(self) -> bool:
-        if self.cost_cap is None:
-            return False
-        return self.total_cost > self.cost_cap
+        with self._lock:
+            if self.cost_cap is None:
+                return False
+            return self.total_cost > self.cost_cap
 
     def track(
         self, agent_name: str, duration_ms: float, rate_per_ms: float | None = None
     ) -> CostEntry:
-        if not self.enabled:
-            entry = CostEntry(agent_name=agent_name, duration_ms=0, rate_per_ms=0, cost=0)
-            self._report.entries.append(entry)
+        with self._lock:
+            if not self.enabled:
+                entry = CostEntry(agent_name=agent_name, duration_ms=0, rate_per_ms=0, cost=0)
+                self._report.entries.append(entry)
+                return entry
+            rate = rate_per_ms if rate_per_ms is not None else self._rates.get(agent_name, 0.0)
+            entry = self._report.add(agent_name, duration_ms, rate)
             return entry
-        rate = rate_per_ms if rate_per_ms is not None else self._rates.get(agent_name, 0.0)
-        entry = self._report.add(agent_name, duration_ms, rate)
-        return entry
 
     def reset(self) -> None:
-        self._report = CostReport()
+        with self._lock:
+            self._report = CostReport()

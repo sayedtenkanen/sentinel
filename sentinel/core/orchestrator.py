@@ -59,16 +59,25 @@ class Orchestrator:
             )
         )
 
-        if self.max_workers and len(context.files) > 1:
-            with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
-                futures = {
-                    pool.submit(self._review_file, file, context): file for file in context.files
-                }
-                for future in as_completed(futures):
+        parallel = self.max_workers and self.max_workers > 1 and len(context.files) > 1
+
+        if parallel:
+            with (
+                ThreadPoolExecutor(max_workers=self.max_workers) as file_pool,
+                ThreadPoolExecutor(max_workers=self.max_workers) as agent_pool,
+            ):
+                futures = {}
+                for file in context.files:
                     if self.cost_tracker.cap_exceeded:
                         break
-                    file_result = future.result()
-                    report.agent_results.extend(file_result)
+                    futures[file_pool.submit(self._review_file, file, agent_pool)] = file
+
+                for future in as_completed(futures):
+                    file = futures[future]
+                    try:
+                        report.agent_results.extend(future.result())
+                    except Exception as e:
+                        self._trace_file_failed(file, str(e))
         else:
             for file in context.files:
                 if self.cost_tracker.cap_exceeded:
@@ -83,8 +92,11 @@ class Orchestrator:
                         )
                     )
                     break
-                file_result = self._review_file(file, context)
-                report.agent_results.extend(file_result)
+                try:
+                    file_result = self._review_file(file)
+                    report.agent_results.extend(file_result)
+                except Exception as e:
+                    self._trace_file_failed(file, str(e))
 
         report.duration_ms = (time.perf_counter() - start) * 1000
 
@@ -104,19 +116,49 @@ class Orchestrator:
 
         return report
 
-    def _review_file(self, file: FileContext, _context: ReviewContext) -> list[AgentResult]:
+    def _trace_file_failed(self, file: FileContext, error: str) -> None:
+        self.tracer.trace(
+            TraceEvent(
+                agent_name="orchestrator",
+                event="review.file_failed",
+                metadata={"file": file.path, "error": error},
+            )
+        )
+
+    def _review_file(
+        self, file: FileContext, agent_pool: ThreadPoolExecutor | None = None
+    ) -> list[AgentResult]:
         results: list[AgentResult] = []
 
-        if self.max_workers:
-            with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
-                agent_futures = {
-                    pool.submit(self._run_agent, agent, file): agent for agent in self.agents
-                }
-                for future in as_completed(agent_futures):
+        if agent_pool:
+            agent_futures = {
+                agent_pool.submit(self._run_agent, agent, file): i
+                for i, agent in enumerate(self.agents)
+            }
+            sorted_futures = sorted(agent_futures.items(), key=lambda x: x[1])
+            for future, _idx in sorted_futures:
+                try:
                     results.append(future.result())
+                except Exception as e:
+                    results.append(
+                        AgentResult(
+                            agent_name="orchestrator",
+                            status=AgentStatus.FAILED,
+                            error=str(e),
+                        )
+                    )
         else:
             for agent in self.agents:
-                results.append(self._run_agent(agent, file))
+                try:
+                    results.append(self._run_agent(agent, file))
+                except Exception as e:
+                    results.append(
+                        AgentResult(
+                            agent_name=agent.name,
+                            status=AgentStatus.FAILED,
+                            error=str(e),
+                        )
+                    )
 
         return results
 
