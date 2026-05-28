@@ -172,7 +172,7 @@ Observability — tracing, metrics, feedback collection, and a web dashboard.
 |---|---|---|
 | **Tracer** | `sentinel/monitor/tracer.py` | Captures trace events (`run.started`, `run.completed`, `review.*`), metrics, feedback storage/export. Pluggable — can swap for OpenTelemetry, LangSmith |
 | **Dashboard** | `sentinel/monitor/dashboard.py` | Self-contained web dashboard (stdlib `http.server`). Serves HTML/JS with bar charts, trend charts, trace table, feedback section. REST API: `/api/stats`, `/api/traces`, `/api/feedback` (POST) |
-| **Feedback** | Via tracer + dashboard + CLI | `Feedback` dataclass in `core/types.py`. `Tracer.store_feedback()` writes `feedback_trace_*.json`. Dashboard loads and displays feedbacks. CLI `--feedback` flag submits human ratings |
+| **Feedback** | Via tracer + dashboard + CLI | `Feedback` dataclass in `core/types.py`. `Tracer.store_feedback()` writes `feedback_trace_*.json`. Dashboard loads and displays feedback entries. CLI `--feedback` flag submits human ratings |
 
 ```bash
 python -m sentinel.monitor.dashboard --trace-dir ./traces --port 8080

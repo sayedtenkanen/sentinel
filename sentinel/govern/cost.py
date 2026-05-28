@@ -6,6 +6,7 @@ Supports cost tracking for both static analysis (free) and LLM-based agents
 
 from __future__ import annotations
 
+import copy
 import threading
 from dataclasses import dataclass, field
 
@@ -91,7 +92,7 @@ class CostTracker:
     @property
     def report(self) -> CostReport:
         with self._lock:
-            return self._report
+            return copy.deepcopy(self._report)
 
     @property
     def total_cost(self) -> float:

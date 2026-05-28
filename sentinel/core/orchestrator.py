@@ -132,17 +132,17 @@ class Orchestrator:
 
         if agent_pool:
             agent_futures = {
-                agent_pool.submit(self._run_agent, agent, file): i
+                agent_pool.submit(self._run_agent, agent, file): (i, agent)
                 for i, agent in enumerate(self.agents)
             }
-            sorted_futures = sorted(agent_futures.items(), key=lambda x: x[1])
-            for future, _idx in sorted_futures:
+            sorted_futures = sorted(agent_futures.items(), key=lambda x: x[1][0])
+            for future, (_idx, agent) in sorted_futures:
                 try:
                     results.append(future.result())
                 except Exception as e:
                     results.append(
                         AgentResult(
-                            agent_name="orchestrator",
+                            agent_name=agent.name,
                             status=AgentStatus.FAILED,
                             error=str(e),
                         )
