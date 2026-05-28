@@ -43,7 +43,7 @@ jobs:
       - name: Secrets scan staged files
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            files=$(git diff --name-only --diff-filter=AM ${{ github.base_ref }}...HEAD -- '*.py')
+            files=$(git diff --name-only --diff-filter=AM ${{ github.event.pull_request.base.sha }}...HEAD -- '*.py')
           else
             if git rev-parse HEAD~1 >/dev/null 2>&1; then
               base=HEAD~1
@@ -107,7 +107,7 @@ jobs:
         id: review
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            files=$(git diff --name-only --diff-filter=AM ${{ github.base_ref }}...HEAD -- '*.py')
+            files=$(git diff --name-only --diff-filter=AM ${{ github.event.pull_request.base.sha }}...HEAD -- '*.py')
           else
             if git rev-parse HEAD~1 >/dev/null 2>&1; then
               base=HEAD~1
