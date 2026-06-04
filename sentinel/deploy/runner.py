@@ -166,9 +166,10 @@ def _setup_agents(cfg: dict, disabled: set[str], args: argparse.Namespace | None
     from ..agents.security import SecurityAgent
     from ..agents.static_analysis import StaticAnalysisAgent
     from ..agents.style import StyleAgent
+    from ..core.base_agent import BaseAgent
 
     sa_cfg = agent_config(cfg, "static-analysis")
-    agents = [
+    agents: list[BaseAgent] = [
         StaticAnalysisAgent(
             enabled="static-analysis" not in disabled,
             complexity_threshold=sa_cfg.get("complexity_threshold", 25),

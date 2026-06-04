@@ -8,6 +8,7 @@ for agent prompts (template §5: direct tools).
 from __future__ import annotations
 
 import inspect
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 
@@ -24,7 +25,7 @@ class Param:
 class Tool:
     name: str
     description: str
-    fn: callable
+    fn: Callable[..., object]
     parameters: list[Param] = field(default_factory=list)
     returns: str = ""
 
@@ -32,12 +33,13 @@ class Tool:
 def _type_name(t: object) -> str:
     if t is inspect.Parameter.empty:
         return "Any"
-    if hasattr(t, "__name__"):
-        return t.__name__
+    name = getattr(t, "__name__", None)
+    if isinstance(name, str):
+        return name
     return str(t)
 
 
-def _build_params(func: callable) -> list[Param]:
+def _build_params(func: Callable[..., object]) -> list[Param]:
     sig = inspect.signature(func)
     params: list[Param] = []
     for name, param in sig.parameters.items():
@@ -53,7 +55,7 @@ def _build_params(func: callable) -> list[Param]:
     return params
 
 
-def _build_returns(func: callable) -> str:
+def _build_returns(func: Callable[..., object]) -> str:
     sig = inspect.signature(func)
     hint = sig.return_annotation
     if hint is inspect.Parameter.empty or hint is inspect.Signature.empty:
@@ -70,9 +72,9 @@ class ToolRegistry:
         self._tools: dict[str, Tool] = {}
 
     def register(
-        self, fn: callable, name: str | None = None, description: str | None = None
+        self, fn: Callable[..., object], name: str | None = None, description: str | None = None
     ) -> Tool:
-        tool_name = name or fn.__name__
+        tool_name = name or getattr(fn, "__name__", "") or type(fn).__name__
         tool_desc = description or (fn.__doc__ or "").strip() or f"Calls {tool_name}"
         tool = Tool(
             name=tool_name,
@@ -84,7 +86,7 @@ class ToolRegistry:
         self._tools[tool_name] = tool
         return tool
 
-    def register_many(self, **fns: callable) -> None:
+    def register_many(self, **fns: Callable[..., object]) -> None:
         for name, fn in fns.items():
             self.register(fn, name=name)
 

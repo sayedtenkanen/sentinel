@@ -147,12 +147,19 @@ class Sandbox:
             allowed_modules if allowed_modules is not None else ALLOWED_MODULES
         )
 
-    def _safe_import(self, name: str, *args: object, **kwargs: object) -> object:
+    def _safe_import(
+        self,
+        name: str,
+        globals: dict[str, object] | None = None,
+        locals: dict[str, object] | None = None,
+        fromlist: tuple[str, ...] | None = None,
+        level: int = 0,
+    ) -> object:
         base = name.split(".")[0]
         if base not in self._allowed_modules:
             msg = f"Module '{base}' is not allowed in sandbox"
             raise ImportError(msg)
-        return __import__(name, *args, **kwargs)
+        return __import__(name, globals, locals, fromlist, level)
 
     def _build_globals(self, inject: dict[str, object] | None = None) -> dict[str, object]:
         builtins = dict(SAFE_BUILTINS)
