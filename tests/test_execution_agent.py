@@ -79,7 +79,15 @@ class TestExecutionAgentParseFindings(unittest.TestCase):
         self.agent = ExecutionAgent(api_key="sk-test")
 
     def test_parse_single_finding(self):
-        output = json.dumps({"line": 5, "severity": "high", "rule_id": "EX001", "message": "test", "suggestion": "fix it"})
+        output = json.dumps(
+            {
+                "line": 5,
+                "severity": "high",
+                "rule_id": "EX001",
+                "message": "test",
+                "suggestion": "fix it",
+            }
+        )
         findings = self.agent._parse_findings(output, "test.py")
         self.assertEqual(len(findings), 1)
         self.assertEqual(findings[0].line, 5)
@@ -88,14 +96,26 @@ class TestExecutionAgentParseFindings(unittest.TestCase):
 
     def test_parse_multiple_findings(self):
         lines = [
-            json.dumps({"line": 1, "severity": "critical", "rule_id": "EX001", "message": "a", "suggestion": ""}),
-            json.dumps({"line": 2, "severity": "low", "rule_id": "EX002", "message": "b", "suggestion": ""}),
+            json.dumps(
+                {
+                    "line": 1,
+                    "severity": "critical",
+                    "rule_id": "EX001",
+                    "message": "a",
+                    "suggestion": "",
+                }
+            ),
+            json.dumps(
+                {"line": 2, "severity": "low", "rule_id": "EX002", "message": "b", "suggestion": ""}
+            ),
         ]
         findings = self.agent._parse_findings("\n".join(lines), "test.py")
         self.assertEqual(len(findings), 2)
 
     def test_parse_invalid_json_skipped(self):
-        output = "not json\n" + json.dumps({"line": 1, "severity": "info", "rule_id": "EX001", "message": "ok", "suggestion": ""})
+        output = "not json\n" + json.dumps(
+            {"line": 1, "severity": "info", "rule_id": "EX001", "message": "ok", "suggestion": ""}
+        )
         findings = self.agent._parse_findings(output, "test.py")
         self.assertEqual(len(findings), 1)
 
@@ -108,59 +128,129 @@ class TestExecutionAgentParseFindings(unittest.TestCase):
         self.assertEqual(len(findings), 0)
 
     def test_parse_invalid_severity_defaults_to_info(self):
-        output = json.dumps({"line": 1, "severity": "unknown", "rule_id": "EX001", "message": "test", "suggestion": ""})
+        output = json.dumps(
+            {
+                "line": 1,
+                "severity": "unknown",
+                "rule_id": "EX001",
+                "message": "test",
+                "suggestion": "",
+            }
+        )
         findings = self.agent._parse_findings(output, "test.py")
         self.assertEqual(findings[0].severity.value, "info")
 
 
 class TestExecutionAgentSandbox(unittest.TestCase):
     def test_agent_uses_sandbox_for_execution(self):
-        mock_sandbox = MockSandbox(responses=[
-            {"success": True, "output": json.dumps({"line": 1, "severity": "low", "rule_id": "EX001", "message": "test", "suggestion": ""}), "error": None, "execution_ms": 1.0},
-        ])
+        mock_sandbox = MockSandbox(
+            responses=[
+                {
+                    "success": True,
+                    "output": json.dumps(
+                        {
+                            "line": 1,
+                            "severity": "low",
+                            "rule_id": "EX001",
+                            "message": "test",
+                            "suggestion": "",
+                        }
+                    ),
+                    "error": None,
+                    "execution_ms": 1.0,
+                },
+            ]
+        )
         agent = ExecutionAgent(api_key="sk-test", sandbox=mock_sandbox)
         findings = agent._parse_findings(
-            json.dumps({"line": 1, "severity": "low", "rule_id": "EX001", "message": "test", "suggestion": ""}),
+            json.dumps(
+                {
+                    "line": 1,
+                    "severity": "low",
+                    "rule_id": "EX001",
+                    "message": "test",
+                    "suggestion": "",
+                }
+            ),
             "test.py",
         )
         self.assertEqual(len(findings), 1)
 
     def test_retry_on_sandbox_error(self):
-        mock_sandbox = MockSandbox(responses=[
-            {"success": False, "output": "", "error": "NameError: x is not defined", "execution_ms": 1.0},
-            {"success": True, "output": json.dumps({"line": 1, "severity": "info", "rule_id": "EX001", "message": "fixed", "suggestion": ""}), "error": None, "execution_ms": 1.0},
-        ])
+        mock_sandbox = MockSandbox(
+            responses=[
+                {
+                    "success": False,
+                    "output": "",
+                    "error": "NameError: x is not defined",
+                    "execution_ms": 1.0,
+                },
+                {
+                    "success": True,
+                    "output": json.dumps(
+                        {
+                            "line": 1,
+                            "severity": "info",
+                            "rule_id": "EX001",
+                            "message": "fixed",
+                            "suggestion": "",
+                        }
+                    ),
+                    "error": None,
+                    "execution_ms": 1.0,
+                },
+            ]
+        )
         mock_llm = MagicMock(return_value="```python\nprint('ok')\n```")
         agent = ExecutionAgent(api_key="sk-test", sandbox=mock_sandbox)
-        with patch.object(agent, '_call_llm', mock_llm):
+        with patch.object(agent, "_call_llm", mock_llm):
             agent.analyze(make_file("x = 1"))
         self.assertGreaterEqual(mock_llm.call_count, 2)
 
     def test_max_retries_exhausted(self):
-        mock_sandbox = MockSandbox(responses=[
-            {"success": False, "output": "", "error": "Error", "execution_ms": 1.0},
-            {"success": False, "output": "", "error": "Error", "execution_ms": 1.0},
-            {"success": False, "output": "", "error": "Error", "execution_ms": 1.0},
-        ])
+        mock_sandbox = MockSandbox(
+            responses=[
+                {"success": False, "output": "", "error": "Error", "execution_ms": 1.0},
+                {"success": False, "output": "", "error": "Error", "execution_ms": 1.0},
+                {"success": False, "output": "", "error": "Error", "execution_ms": 1.0},
+            ]
+        )
         mock_llm = MagicMock(return_value="```python\nprint('ok')\n```")
         agent = ExecutionAgent(api_key="sk-test", sandbox=mock_sandbox, max_retries=3)
-        with patch.object(agent, '_call_llm', mock_llm):
+        with patch.object(agent, "_call_llm", mock_llm):
             findings = agent.analyze(make_file("x = 1"))
         self.assertEqual(mock_llm.call_count, 3)
         self.assertEqual(len(findings), 0)
 
     def test_llm_exception_triggers_retry(self):
-        mock_sandbox = MockSandbox(responses=[
-            {"success": True, "output": json.dumps({"line": 1, "severity": "info", "rule_id": "EX001", "message": "ok", "suggestion": ""}), "error": None, "execution_ms": 1.0},
-        ])
+        mock_sandbox = MockSandbox(
+            responses=[
+                {
+                    "success": True,
+                    "output": json.dumps(
+                        {
+                            "line": 1,
+                            "severity": "info",
+                            "rule_id": "EX001",
+                            "message": "ok",
+                            "suggestion": "",
+                        }
+                    ),
+                    "error": None,
+                    "execution_ms": 1.0,
+                },
+            ]
+        )
         call_count = [0]
+
         def flaky_llm(prompt):
             call_count[0] += 1
             if call_count[0] == 1:
                 raise ConnectionError("API down")
             return "```python\nprint('ok')\n```"
+
         agent = ExecutionAgent(api_key="sk-test", sandbox=mock_sandbox, max_retries=2)
-        with patch.object(agent, '_call_llm', flaky_llm):
+        with patch.object(agent, "_call_llm", flaky_llm):
             findings = agent.analyze(make_file("x = 1"))
         self.assertEqual(call_count[0], 2)
         self.assertGreaterEqual(len(findings), 0)

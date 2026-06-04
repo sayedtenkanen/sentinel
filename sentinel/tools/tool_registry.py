@@ -69,7 +69,9 @@ class ToolRegistry:
     def __init__(self) -> None:
         self._tools: dict[str, Tool] = {}
 
-    def register(self, fn: callable, name: str | None = None, description: str | None = None) -> Tool:
+    def register(
+        self, fn: callable, name: str | None = None, description: str | None = None
+    ) -> Tool:
         tool_name = name or fn.__name__
         tool_desc = description or (fn.__doc__ or "").strip() or f"Calls {tool_name}"
         tool = Tool(

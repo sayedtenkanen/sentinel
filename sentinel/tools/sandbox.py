@@ -11,11 +11,28 @@ import io
 import threading
 import time
 
-ALLOWED_MODULES: frozenset[str] = frozenset({
-    "json", "re", "math", "collections", "copy", "typing", "dataclasses",
-    "enum", "itertools", "functools", "statistics", "textwrap", "string",
-    "decimal", "fractions", "hashlib", "time", "datetime",
-})
+ALLOWED_MODULES: frozenset[str] = frozenset(
+    {
+        "json",
+        "re",
+        "math",
+        "collections",
+        "copy",
+        "typing",
+        "dataclasses",
+        "enum",
+        "itertools",
+        "functools",
+        "statistics",
+        "textwrap",
+        "string",
+        "decimal",
+        "fractions",
+        "hashlib",
+        "time",
+        "datetime",
+    }
+)
 
 SAFE_BUILTINS: dict[str, object] = {
     "print": print,

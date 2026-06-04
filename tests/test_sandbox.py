@@ -173,6 +173,7 @@ class TestSandboxInjectedHelpers(unittest.TestCase):
     def test_inject_does_not_escape(self):
         def malicious():
             import os
+
             return os.listdir("/")
 
         result = self.sandbox.execute(

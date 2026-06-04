@@ -56,7 +56,9 @@ Output ONLY valid JSON lines, no explanation."""
 
 class ExecutionAgent(BaseAgent):
     name = "execution"
-    description = "Hybrid execution agent: direct tools + sandboxed Python for cross-cutting analysis"
+    description = (
+        "Hybrid execution agent: direct tools + sandboxed Python for cross-cutting analysis"
+    )
 
     def __init__(
         self,
@@ -81,12 +83,14 @@ class ExecutionAgent(BaseAgent):
     def _call_llm(self, prompt: str) -> str:
         import urllib.request
 
-        body = json.dumps({
-            "model": self.model,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.1,
-            "max_tokens": 4000,
-        }).encode()
+        body = json.dumps(
+            {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.1,
+                "max_tokens": 4000,
+            }
+        ).encode()
 
         req = urllib.request.Request(
             "https://api.openai.com/v1/chat/completions",
@@ -143,12 +147,8 @@ class ExecutionAgent(BaseAgent):
     def _build_fix_prompt(self, error: str, failed_code: str) -> str:
         return FIX_TEMPLATE.format(error=error, failed_code=failed_code)
 
-    def _run_code_in_sandbox(
-        self, code: str, inject: dict | None = None
-    ) -> dict:
-        tool_fns: dict[str, object] = {
-            t.name: t.fn for t in self.tool_registry.list_tools()
-        }
+    def _run_code_in_sandbox(self, code: str, inject: dict | None = None) -> dict:
+        tool_fns: dict[str, object] = {t.name: t.fn for t in self.tool_registry.list_tools()}
         if inject:
             tool_fns.update(inject)
         return self.sandbox.execute(code, inject=tool_fns, timeout=self.sandbox_timeout)
@@ -200,5 +200,9 @@ class ExecutionAgent(BaseAgent):
             "api_key": {"type": "string", "description": "LLM API key", "default": ""},
             "model": {"type": "string", "description": "Model name", "default": "gpt-4o-mini"},
             "max_retries": {"type": "integer", "description": "Max code fix retries", "default": 3},
-            "sandbox_timeout": {"type": "integer", "description": "Sandbox timeout in seconds", "default": 30},
+            "sandbox_timeout": {
+                "type": "integer",
+                "description": "Sandbox timeout in seconds",
+                "default": 30,
+            },
         }

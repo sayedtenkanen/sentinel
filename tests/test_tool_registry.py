@@ -226,7 +226,10 @@ class TestDefaultRegistrySingleton(unittest.TestCase):
     def test_registration_updates_singleton(self):
         r1 = default_registry()
         r2 = default_registry()
-        def new_tool(): pass
+
+        def new_tool():
+            pass
+
         r1.register(new_tool, name="singleton_test")
         self.assertIsNotNone(r2.get("singleton_test"))
 

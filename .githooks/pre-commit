@@ -12,6 +12,7 @@ import sys
 
 HOOK_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(HOOK_DIR)
+sys.path.insert(0, PROJECT_DIR)
 SKIP = os.environ.get("SKIP", "").split(",")
 
 
