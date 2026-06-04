@@ -46,97 +46,58 @@ python -m sentinel.test.simulations
 
 ## Data Flow
 
-```
-                                 ┌─────────────┐
-                                 │  CLI / User  │
-                                 └──────┬──────┘
-                                        │ paths, flags
-                                        v
-                                 ┌──────────────┐
-                                 │   runner.py   │
-                                 │   load_config │
-                                 └──────┬───────┘
-                                        │ FileContext[]
-                                        v
-               ┌───────────────────────────────────────────┐
-               │              Orchestrator                  │
-               │                                            │
-               │  ┌──────────────┐    ┌──────────────────┐  │
-               │  │  CostTracker  │    │     Tracer       │  │
-               │  │  (per-agent)  │    │  (events+metrics)│  │
-               │  └──────┬───────┘    └────────┬─────────┘  │
-               │         │                     │            │
-               │         v                     v            │
-               │  ┌────────────────────────────────────┐    │
-               │  │       ThreadPoolExecutor            │    │
-               │  │  ┌────────┐┌──────┐┌─────┐┌─────┐  │    │
-               │  │  │static- ││secu- ││style││best-│ ...│    │
-               │  │  │analysis││rity  ││     ││prac │  │    │
-               │  │  └───┬────┘└──┬───┘└──┬──┘└──┬──┘  │    │
-               │  │       │        │       │      │     │    │
-               │  │       v        v       v      v     │    │
-               │  │  ┌─────────────────────────────┐    │    │
-               │  │  │ architecture + refactor       │    │    │
-               │  │  │ (static, per-file)            │    │    │
-               │  │  └──────────────┬──────────────┘    │    │
-               │  │                 │                   │    │
-               │  │  ┌─────────────────────────────┐    │    │
-               │  │  │   llm-review (optional)      │    │    │
-               │  │  │   ┌─────────────────┐       │    │    │
-               │  │  │   │   Retriever      │◄─────│────│────│──── RAG KB
-               │  │  │   │  (TF-IDF cos sim)│      │    │    │
-               │  │  │   └────────┬────────┘       │    │    │
-               │  │  │            │ RAG context     │    │    │
-               │  │  │            v                 │    │    │
-               │  │  │   ┌─────────────────┐       │    │    │
-               │  │  │   │   LLM API call   │       │    │    │
-               │  │  │   │ (OpenAI-compat)  │       │    │    │
-               │  │  │   └────────┬────────┘       │    │    │
-               │  │  └────────────┼─────────────────┘    │    │
-               │  └───────────────┼──────────────────────┘    │
-               │                  │ Finding[]                  │
-               └──────────────────┼───────────────────────────┘
-                                 │ AgentResult[]
-                                 v
-                              ┌──────────────────┐
-                              │    SummaryAgent   │
-                              │  (score + verdict)│
-                              └────────┬─────────┘
-                                       │ summary + risk
-                                       v
-                              ┌─────────────────────┐
-                              │   Risk Summary       │
-                              │  (assess_risk cross  │
-                              │   file aggregation)  │
-                              └──────────┬──────────┘
-                                         │
-                    ┌─────────────────┼─────────────────┐
-                    │                 │                  │
-                    v                 v                  v
-             ┌──────────┐    ┌──────────────┐   ┌──────────────┐
-             │  Report   │    │   Tracer     │   │  CostTracker  │
-             │ (JSON/MD) │    │ (trace files)│   │  (cost line)  │
-             └──────────┘    └──────┬───────┘   └──────────────┘
-                                    │
-                                    v
-                           ┌────────────────────┐
-                           │  feedback_trace_*.json
-                           │  (POST /api/feedback)│
-                           └────────┬───────────┘
-                                    │
-                                    v
-                           ┌────────────────────┐
-                           │  Dashboard (HTML)  │
-                           │  /api/stats        │
-                           │  /api/traces       │
-                           │  /api/feedback     │
-                           └────────────────────┘
+```mermaid
+flowchart TD
+    CLI["CLI / User"] -->|paths, flags| RUN["runner.py\nload_config"]
+    RUN -->|FileContext[]| ORCH
 
-► External inputs:  CLI args, --config .code-review.json, --feedback, --llm-api-key
-► Storage:         trace_*.json, feedback_trace_*.json, .sentinel-profiles/, RAG KB (vector_store.json, knowledge_base.json)
-► Outputs:         stdout (MD/JSON), dashboard (HTTP), trace files
-► Optional:        LLM API (OpenAI-compatible), RAG knowledge base
+    subgraph ORCH["Orchestrator"]
+        CT["CostTracker\n(per-agent)"]
+        TR["Tracer\n(events+metrics)"]
+
+        subgraph TPE["ThreadPoolExecutor"]
+            A1["static-analysis"]
+            A2["security"]
+            A3["style"]
+            A4["best-practices"]
+
+            subgraph AR["architecture + refactor"]
+                ARC["architecture"]
+                REF["refactor"]
+            end
+
+            subgraph LLM["llm-review (optional)"]
+                RET["Retriever\n(TF-IDF cos sim)"]
+                API["LLM API call\n(OpenAI-compat)"]
+                RET -->|RAG context| API
+            end
+
+            A1 & A2 & A3 & A4 --> AR --> LLM
+        end
+
+        CT -.->|tracks| TPE
+        TR -.->|traces| TPE
+    end
+
+    RAG[("RAG KB")] -.->|similarity search| RET
+
+    TPE --> SUM["SummaryAgent\n(score + verdict)"]
+    SUM --> RS["Risk Summary\n(assess_risk)"]
+
+    RS --> REP["Report\n(JSON/MD)"]
+    RS --> TR2["Tracer\n(trace files)"]
+    RS --> CT2["CostTracker\n(cost line)"]
+
+    TR2 --> FB["feedback_trace_*.json\nPOST /api/feedback"]
+    FB --> DASH["Dashboard (HTML)\n/api/stats\n/api/traces\n/api/feedback"]
+
+    style LLM stroke-dasharray: 6 3
 ```
+
+► External inputs: CLI args, --config .code-review.json, --feedback, --llm-api-key
+► Storage: trace_*.json, feedback_trace_*.json, .sentinel-profiles/, RAG KB (vector_store.json, knowledge_base.json)
+► Outputs: stdout (MD/JSON), dashboard (HTTP), trace files
+► Optional: LLM API (OpenAI-compatible), RAG knowledge base
 
 ## Agents
 
