@@ -1,6 +1,6 @@
 # Code Review Bot — Development Reference
 
-> **Python only.** Only `.py` files are discovered and analyzed. Other languages are ignored.
+> **Python + JavaScript.** `.py` and `.js` files are discovered and analyzed. Other languages return empty results via `NullParser`. Add language support by implementing `BaseParser` and registering it in `ParserRegistry`.
 
 ## Project Structure
 
@@ -23,15 +23,22 @@ sentinel/
 │   ├── execution_agent.py  # Hybrid tool + sandboxed code execution agent (decision policy, iterative fix)
 │   ├── llm_review.py       # Optional LLM-powered review with RAG context retrieval
 │   └── summary.py          # Compiles final verdict, severity breakdown, cost summary
+├── parsers/             # <-- Language-agnostic parser abstraction
+│   ├── base.py          # BaseParser ABC (15 methods for language-agnostic analysis)
+│   ├── python.py        # PythonParser — full ast.* implementation
+│   ├── javascript.py    # JavaScriptParser — regex/line-based heuristics
+│   ├── null.py          # NullParser — safe empty defaults for unsupported languages
+│   ├── models.py        # 11 typed dataclasses: FunctionLength, UnusedImport, etc.
+│   └── __init__.py      # ParserRegistry + default_registry singleton
 ├── rag/
 │   ├── vector_store.py     # TF-IDF vector store + cosine similarity (pure Python)
 │   ├── knowledge_base.py   # Code chunking, CRUD for findings, JSON persistence
 │   └── retriever.py        # Similarity search + RAG prompt builder for agents
 ├── tools/
-│   ├── ast_tools.py        # AST-based complexity, function length, unused import detection
+│   ├── ast_tools.py        # Delegates to PythonParser (backward compat shim)
 │   ├── import_graph.py     # AST-based import dependency graph builder (cycles, coupling, god modules)
 │   ├── config.py           # .code-review.json loader with filter/suppress/matches helpers
-│   ├── git_tools.py        # Diff parsing, language detection
+│   ├── git_tools.py        # Diff parsing, language detection (20+ extensions)
 │   ├── sandbox.py          # Secure Python execution sandbox (restricted exec, timeout, import allow-list)
 │   ├── secrets_scanner.py  # Standalone secrets scanner (20+ patterns)
 │   └── tool_registry.py    # Discoverable direct tools for the hybrid execution agent
@@ -59,8 +66,8 @@ sentinel/
 
 | ADLC Phase | Implementation | Status |
 |---|---|---|
-| **Build** | 10 sub-agents (static-analysis, security, style, best-practices, documentation, architecture, refactor, summary) + optional (llm-review, execution-agent) + RAG (TF-IDF vector store, knowledge base, retriever) + risk-summary + orchestrator + tools (import-graph) + sandbox + tool registry | ✅ Complete (architecture + refactor + risk-summary + import-graph added) |
-| **Test** | `test/evals.py` (2 fixtures, 100% score), `test/simulations.py` (3 scenarios, 6/6 steps), 570 unit tests | ✅ Complete (architecture/refactor/risk-summary/import-graph/rule-miner tests added) |
+| **Build** | 10 sub-agents (static-analysis, security, style, best-practices, documentation, architecture, refactor, summary) + optional (llm-review, execution-agent) + RAG (TF-IDF vector store, knowledge base, retriever) + risk-summary + orchestrator + tools (import-graph) + sandbox + tool registry + parsers (PythonParser, JavaScriptParser, NullParser) | ✅ Complete (architecture + refactor + risk-summary + import-graph added; parser abstraction layer with 3 parsers) |
+| **Test** | `test/evals.py` (2 fixtures, 100% score), `test/simulations.py` (3 scenarios, 6/6 steps), 609 unit tests | ✅ Complete (JS parser, NullParser tests added) |
 | **Deploy** | `deploy/runner.py` CLI with `--format`, `--output`, `--disable-agent`, `--trace-dir`, `--config`, `--cost-cap`, `--feedback`, `--workers`, `--llm-api-key`, `--llm-model`, `--rag-kb-dir`; `govern/context_hub.py` for versioned profiles | ✅ Complete (LLM + RAG flags added) |
 | **Monitor** | `monitor/tracer.py` captures trace events + metrics + feedbacks; `monitor/dashboard.py` HTML/JSON dashboard with `/api/feedback` POST endpoint | ✅ Complete (feedback pipeline added) |
 | **Govern** | `--disable-agent`, `suppress` rules, severity-weighted scoring, JSON audit trails; `govern/cost.py` cost caps; `govern/registry.py` agent discoverability (11 agents) | ✅ Complete (cost + registry added) |
@@ -157,7 +164,7 @@ git config core.hooksPath .githooks
 SKIP=lint,format,ty,secrets,coverage git commit -m "skip all hooks"
 ```
 
-Expected: 100% on both good_code and bad_code fixtures, **570 tests passing**, 3/3 simulation scenarios passing, 85%+ coverage, zero ruff/ty errors.
+Expected: 100% on both good_code and bad_code fixtures, **609 tests passing**, 3/3 simulation scenarios passing, 85%+ coverage, zero ruff/ty errors.
 
 ## Hybrid Execution Agent
 

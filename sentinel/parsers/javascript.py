@@ -213,10 +213,8 @@ class JavaScriptParser(BaseParser):
                     depth -= 1
                 end += 1
             body = source[bracket_start:end]
-            has_valued = bool(re.search(r"return\s+[^;}\s]", body))
-            has_bare = bool(re.search(r"return\s*[;}]", body)) and not re.search(
-                r"return\s+[^;}\s]", body
-            )
+            has_valued = bool(re.search(r"return\s+\S", body))
+            has_bare = bool(re.search(r"return\s*[;}]", body))
             if has_valued and has_bare:
                 line = source[: func_match.start()].count("\n") + 1
                 results.append(InconsistentReturn(name=name, line=line))
