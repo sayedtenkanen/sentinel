@@ -66,13 +66,52 @@ class ComplexityVisitor(ast.NodeVisitor):
 
 
 PY_BUILTINS = {
-    "list", "dict", "str", "int", "float", "bool", "set", "tuple",
-    "type", "object", "input", "print", "len", "range", "map", "filter",
-    "zip", "open", "file", "id", "eval", "exec", "max", "min", "sum",
-    "any", "all", "abs", "round", "sorted", "reversed", "enumerate",
-    "iter", "next", "property", "staticmethod", "classmethod", "super",
-    "Exception", "BaseException", "ValueError", "TypeError", "KeyError",
-    "IndexError", "AttributeError", "ImportError",
+    "list",
+    "dict",
+    "str",
+    "int",
+    "float",
+    "bool",
+    "set",
+    "tuple",
+    "type",
+    "object",
+    "input",
+    "print",
+    "len",
+    "range",
+    "map",
+    "filter",
+    "zip",
+    "open",
+    "file",
+    "id",
+    "eval",
+    "exec",
+    "max",
+    "min",
+    "sum",
+    "any",
+    "all",
+    "abs",
+    "round",
+    "sorted",
+    "reversed",
+    "enumerate",
+    "iter",
+    "next",
+    "property",
+    "staticmethod",
+    "classmethod",
+    "super",
+    "Exception",
+    "BaseException",
+    "ValueError",
+    "TypeError",
+    "KeyError",
+    "IndexError",
+    "AttributeError",
+    "ImportError",
 }
 
 
@@ -106,14 +145,16 @@ class PythonParser(BaseParser):
                         params += len(node.args.kwonlyargs)
                     if node.args.kwarg:
                         params += 1
-                    results.append(FunctionLength(
-                        name=node.name,
-                        line=start,
-                        length=length,
-                        complexity=visitor.complexity,
-                        nesting=visitor.max_nesting,
-                        params=params,
-                    ))
+                    results.append(
+                        FunctionLength(
+                            name=node.name,
+                            line=start,
+                            length=length,
+                            complexity=visitor.complexity,
+                            nesting=visitor.max_nesting,
+                            params=params,
+                        )
+                    )
         except SyntaxError:
             pass
         return results
@@ -131,20 +172,24 @@ class PythonParser(BaseParser):
                     for alias in node.names:
                         name = alias.asname or alias.name.split(".")[0]
                         if name not in names_in_scope and name != "__future__":
-                            unused.append(UnusedImport(
-                                name=alias.name,
-                                line=node.lineno or 0,
-                            ))
+                            unused.append(
+                                UnusedImport(
+                                    name=alias.name,
+                                    line=node.lineno or 0,
+                                )
+                            )
                 elif isinstance(node, ast.ImportFrom):
                     for alias in node.names:
                         if alias.name == "*":
                             continue
                         name = alias.asname or alias.name
                         if name not in names_in_scope:
-                            unused.append(UnusedImport(
-                                name=f"{node.module or ''}.{alias.name}",
-                                line=node.lineno or 0,
-                            ))
+                            unused.append(
+                                UnusedImport(
+                                    name=f"{node.module or ''}.{alias.name}",
+                                    line=node.lineno or 0,
+                                )
+                            )
         except SyntaxError:
             pass
         return unused
@@ -165,7 +210,9 @@ class PythonParser(BaseParser):
                     imports.append(base)
         return sorted(set(imports))
 
-    def _has_docstring(self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Module) -> bool:
+    def _has_docstring(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef | ast.Module
+    ) -> bool:
         return (
             bool(node.body)
             and isinstance(node.body[0], ast.Expr)
@@ -179,19 +226,23 @@ class PythonParser(BaseParser):
             tree = ast.parse(source)
             for node in ast.walk(tree):
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    results.append(DocstringInfo(
-                        name=node.name,
-                        line=node.lineno or 0,
-                        has_docstring=bool(node.body and self._has_docstring(node)),
-                        type="function",
-                    ))
+                    results.append(
+                        DocstringInfo(
+                            name=node.name,
+                            line=node.lineno or 0,
+                            has_docstring=bool(node.body and self._has_docstring(node)),
+                            type="function",
+                        )
+                    )
                 elif isinstance(node, ast.ClassDef):
-                    results.append(DocstringInfo(
-                        name=node.name,
-                        line=node.lineno or 0,
-                        has_docstring=bool(node.body and self._has_docstring(node)),
-                        type="class",
-                    ))
+                    results.append(
+                        DocstringInfo(
+                            name=node.name,
+                            line=node.lineno or 0,
+                            has_docstring=bool(node.body and self._has_docstring(node)),
+                            type="class",
+                        )
+                    )
         except SyntaxError:
             pass
         return results
@@ -204,10 +255,12 @@ class PythonParser(BaseParser):
                 if isinstance(node, ast.FunctionDef):
                     for default in node.args.defaults:
                         if isinstance(default, (ast.List, ast.Dict, ast.Set)):
-                            results.append(MutableDefault(
-                                name=node.name,
-                                line=default.lineno or 0,
-                            ))
+                            results.append(
+                                MutableDefault(
+                                    name=node.name,
+                                    line=default.lineno or 0,
+                                )
+                            )
         except SyntaxError:
             pass
         return results
@@ -224,11 +277,13 @@ class PythonParser(BaseParser):
                     if node.args.kwarg:
                         param_count += 1
                     if param_count > max_params:
-                        results.append(ParamOverflow(
-                            name=node.name,
-                            line=node.lineno or 0,
-                            params=param_count,
-                        ))
+                        results.append(
+                            ParamOverflow(
+                                name=node.name,
+                                line=node.lineno or 0,
+                                params=param_count,
+                            )
+                        )
         except SyntaxError:
             pass
         return results
@@ -241,14 +296,15 @@ class PythonParser(BaseParser):
                 if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
                     returns_hint = node.returns is not None
                     params_hint = all(
-                        arg.annotation is not None or arg.arg == "self"
-                        for arg in node.args.args
+                        arg.annotation is not None or arg.arg == "self" for arg in node.args.args
                     )
                     if not returns_hint or not params_hint:
-                        results.append(MissingTypeHint(
-                            name=node.name,
-                            line=node.lineno or 0,
-                        ))
+                        results.append(
+                            MissingTypeHint(
+                                name=node.name,
+                                line=node.lineno or 0,
+                            )
+                        )
         except SyntaxError:
             pass
         return results
@@ -285,19 +341,19 @@ class PythonParser(BaseParser):
                     continue
                 doc = first_stmt.value.value
                 actual_params = {
-                    arg.arg
-                    for arg in node.args.args
-                    if arg.arg != "self" and arg.arg != "cls"
+                    arg.arg for arg in node.args.args if arg.arg != "self" and arg.arg != "cls"
                 }
                 doc_params = set(re.findall(r"^\s*([\w_]+)\s*:", doc, re.MULTILINE))
                 missing = actual_params - doc_params
                 if missing and node.name != "__init__":
                     for param in sorted(missing):
-                        results.append(UndocumentedParam(
-                            function=node.name,
-                            param=param,
-                            line=node.lineno or 0,
-                        ))
+                        results.append(
+                            UndocumentedParam(
+                                function=node.name,
+                                param=param,
+                                line=node.lineno or 0,
+                            )
+                        )
         except SyntaxError:
             pass
         return results
@@ -317,10 +373,12 @@ class PythonParser(BaseParser):
                             else:
                                 has_bare_return = True
                     if has_explicit_return and has_bare_return:
-                        results.append(InconsistentReturn(
-                            name=node.name,
-                            line=node.lineno or 0,
-                        ))
+                        results.append(
+                            InconsistentReturn(
+                                name=node.name,
+                                line=node.lineno or 0,
+                            )
+                        )
         except SyntaxError:
             pass
         return results
@@ -339,9 +397,11 @@ class PythonParser(BaseParser):
                         for else_stmt in node.orelse:
                             if isinstance(else_stmt, ast.If):
                                 continue
-                        results.append(UnnecessaryElse(
-                            line=node.orelse[0].lineno or 0,
-                        ))
+                        results.append(
+                            UnnecessaryElse(
+                                line=node.orelse[0].lineno or 0,
+                            )
+                        )
                         break
         except SyntaxError:
             pass
@@ -355,24 +415,30 @@ class PythonParser(BaseParser):
                 if isinstance(node, ast.ClassDef):
                     name = node.name
                     if not re.match(r"^[A-Z][a-zA-Z0-9]*$", name):
-                        results.append(NamingViolation(
-                            name=name,
-                            line=node.lineno or 0,
-                            kind="class",
-                        ))
+                        results.append(
+                            NamingViolation(
+                                name=name,
+                                line=node.lineno or 0,
+                                kind="class",
+                            )
+                        )
                 elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     name = node.name
                     if name[0].isupper() and name != "__init__":
-                        results.append(NamingViolation(
-                            name=name,
-                            line=node.lineno or 0,
-                            kind="function",
-                        ))
+                        results.append(
+                            NamingViolation(
+                                name=name,
+                                line=node.lineno or 0,
+                                kind="function",
+                            )
+                        )
         except SyntaxError:
             pass
         return results
 
-    def find_shadowed_builtins(self, source: str, builtins: set[str] | None = None) -> list[ShadowedBuiltin]:
+    def find_shadowed_builtins(
+        self, source: str, builtins: set[str] | None = None
+    ) -> list[ShadowedBuiltin]:
         results: list[ShadowedBuiltin] = []
         builtins_set = builtins or PY_BUILTINS
         try:
@@ -380,17 +446,21 @@ class PythonParser(BaseParser):
             for node in ast.walk(tree):
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     if node.name in builtins_set:
-                        results.append(ShadowedBuiltin(
+                        results.append(
+                            ShadowedBuiltin(
+                                name=node.name,
+                                line=node.lineno or 0,
+                                kind="function",
+                            )
+                        )
+                elif isinstance(node, ast.ClassDef) and node.name in builtins_set:
+                    results.append(
+                        ShadowedBuiltin(
                             name=node.name,
                             line=node.lineno or 0,
-                            kind="function",
-                        ))
-                elif isinstance(node, ast.ClassDef) and node.name in builtins_set:
-                    results.append(ShadowedBuiltin(
-                        name=node.name,
-                        line=node.lineno or 0,
-                        kind="class",
-                    ))
+                            kind="class",
+                        )
+                    )
         except SyntaxError:
             pass
         return results
