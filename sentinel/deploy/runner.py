@@ -40,7 +40,7 @@ def collect_files(
             lang = detect_language(str(p))
             files.append((str(p), read_file(str(p)), lang))
         elif p.is_dir():
-            for f in sorted(p.rglob("*.py")):
+            for f in sorted(p.rglob("*.py")) + sorted(p.rglob("*.js")):
                 if ".venv" not in f.parts and "__pycache__" not in f.parts:
                     lang = detect_language(str(f))
                     files.append((str(f), read_file(str(f)), lang))

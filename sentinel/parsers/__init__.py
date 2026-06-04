@@ -11,6 +11,7 @@ Usage:
 from __future__ import annotations
 
 from .base import BaseParser
+from .javascript import JavaScriptParser
 from .null import NullParser
 from .python import PythonParser
 
@@ -21,6 +22,10 @@ class ParserRegistry:
     def __init__(self) -> None:
         self._parsers: dict[str, BaseParser] = {
             "python": PythonParser(),
+            "javascript": JavaScriptParser(),
+            "typescript": JavaScriptParser(),
+            "typescriptreact": JavaScriptParser(),
+            "javascriptreact": JavaScriptParser(),
         }
 
     def register(self, language: str, parser: BaseParser) -> None:
@@ -46,4 +51,11 @@ def default_registry() -> ParserRegistry:
     return _DEFAULT_REGISTRY
 
 
-__all__ = ["BaseParser", "NullParser", "ParserRegistry", "PythonParser", "default_registry"]
+__all__ = [
+    "BaseParser",
+    "JavaScriptParser",
+    "NullParser",
+    "ParserRegistry",
+    "PythonParser",
+    "default_registry",
+]
