@@ -123,10 +123,10 @@ class DocumentationAgent(BaseAgent):
             findings.append(
                 self.finding(
                     severity=Severity.LOW,
-                    message=f"Parameter '{item['param']}' in '{item['function']}()' undocumented",
-                    suggestion=f"Add ':param {item['param']}: ...' describing the param",
+                    message=f"Parameter '{item.param}' in '{item.function}()' undocumented",
+                    suggestion=f"Add ':param {item.param}: ...' describing the param",
                     file=path,
-                    line=item["line"],
+                    line=item.line,
                     rule_id="DOC005",
                     category="documentation",
                 )

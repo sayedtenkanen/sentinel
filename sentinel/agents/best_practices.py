@@ -78,10 +78,10 @@ class BestPracticesAgent(BaseAgent):
             findings.append(
                 self.finding(
                     severity=Severity.HIGH,
-                    message=f"Mutable default argument in '{item['name']}'",
+                    message=f"Mutable default argument in '{item.name}'",
                     suggestion=_suggestion,
                     file=path,
-                    line=item["line"],
+                    line=item.line,
                     rule_id="BP003",
                     category="correctness",
                 )
@@ -92,10 +92,10 @@ class BestPracticesAgent(BaseAgent):
             findings.append(
                 self.finding(
                     severity=Severity.INFO,
-                    message=f"Function '{item['name']}' is missing type hints",
+                    message=f"Function '{item.name}' is missing type hints",
                     suggestion="Add type hints for parameters and return value",
                     file=path,
-                    line=item["line"],
+                    line=item.line,
                     rule_id="BP005",
                     category="maintainability",
                 )

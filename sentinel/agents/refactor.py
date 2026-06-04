@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from ..core.base_agent import BaseAgent
 from ..core.types import FileContext, Finding, Severity
+from ..parsers.models import FunctionLength
 from ..tools.ast_tools import find_function_lengths
 
 
@@ -40,21 +41,20 @@ class RefactorAgent(BaseAgent):
         for func in functions:
             score = self._compute_refactor_score(func)
             if score >= self.refactor_threshold:
-                line = func.get("line", 1)
                 findings.append(
                     self.finding(
                         severity=Severity.MEDIUM if score < 30 else Severity.HIGH,
                         message=(
-                            f"Refactor opportunity: {func['name']} "
-                            f"(complexity={func.get('complexity', '?')}, "
-                            f"length={func['length']} lines, score={score:.1f})"
+                            f"Refactor opportunity: {func.name} "
+                            f"(complexity={func.complexity}, "
+                            f"length={func.length} lines, score={score:.1f})"
                         ),
                         suggestion=(
-                            f"Consider splitting {func['name']} into smaller functions. "
+                            f"Consider splitting {func.name} into smaller functions. "
                             f"Refactor score {score:.1f} exceeds threshold {self.refactor_threshold}"
                         ),
                         file=file.path,
-                        line=line,
+                        line=func.line if func.line else 1,
                         rule_id="REF001",
                         category="refactor",
                     )
@@ -77,10 +77,10 @@ class RefactorAgent(BaseAgent):
 
         return findings
 
-    def _compute_refactor_score(self, func: dict) -> float:
-        c_score = func.get("complexity", 1) * self.complexity_weight
-        l_score = func.get("length", 0) * self.length_weight
-        p_score = func.get("params", 0) * self.param_weight
+    def _compute_refactor_score(self, func: FunctionLength) -> float:
+        c_score = func.complexity * self.complexity_weight
+        l_score = func.length * self.length_weight
+        p_score = func.params * self.param_weight
         return c_score + l_score + p_score
 
     def get_config_schema(self) -> dict:

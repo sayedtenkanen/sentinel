@@ -86,16 +86,16 @@ class StaticAnalysisAgent(BaseAgent):
 
     def _check_function_length(self, findings: list[Finding], source: str, path: str) -> None:
         for func in find_function_lengths(source):
-            if func["length"] > self.max_function_length:
+            if func.length > self.max_function_length:
                 _threshold = self.max_function_length
-                _msg = f"Function '{func['name']}' is {func['length']} lines (limit: {_threshold})"
+                _msg = f"Function '{func.name}' is {func.length} lines (limit: {_threshold})"
                 findings.append(
                     self.finding(
                         severity=Severity.MEDIUM,
                         message=_msg,
                         suggestion="Consider breaking this function into smaller units",
                         file=path,
-                        line=func["line"],
+                        line=func.line,
                         rule_id="ST003",
                         category="complexity",
                     )
@@ -120,10 +120,10 @@ class StaticAnalysisAgent(BaseAgent):
             findings.append(
                 self.finding(
                     severity=Severity.LOW,
-                    message=f"Unused import: '{imp['name']}'",
+                    message=f"Unused import: '{imp.name}'",
                     suggestion="Remove unused imports to keep the code clean",
                     file=path,
-                    line=imp["line"],
+                    line=imp.line,
                     rule_id="ST005",
                     category="style",
                 )
@@ -171,10 +171,10 @@ class StaticAnalysisAgent(BaseAgent):
             findings.append(
                 self.finding(
                     severity=Severity.MEDIUM,
-                    message=f"'{func['name']}' has {func['params']} params (limit: {self.max_params})",
+                    message=f"'{func.name}' has {func.params} params (limit: {self.max_params})",
                     suggestion="Use a dataclass or split into smaller functions",
                     file=path,
-                    line=func["line"],
+                    line=func.line,
                     rule_id="ST008",
                     category="complexity",
                 )
@@ -197,10 +197,10 @@ class StaticAnalysisAgent(BaseAgent):
             findings.append(
                 self.finding(
                     severity=Severity.MEDIUM,
-                    message=f"Name '{item['name']}' shadows Python built-in",
-                    suggestion=f"Rename '{item['name']}' to avoid shadowing the built-in",
+                    message=f"Name '{item.name}' shadows Python built-in",
+                    suggestion=f"Rename '{item.name}' to avoid shadowing the built-in",
                     file=path,
-                    line=item["line"],
+                    line=item.line,
                     rule_id="ST009",
                     category="correctness",
                 )

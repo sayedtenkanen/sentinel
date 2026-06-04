@@ -60,8 +60,8 @@ class TestFindFunctionLengths(unittest.TestCase):
 """
         funcs = find_function_lengths(source)
         self.assertEqual(len(funcs), 1)
-        self.assertEqual(funcs[0]["name"], "foo")
-        self.assertEqual(funcs[0]["length"], 4)
+        self.assertEqual(funcs[0].name, "foo")
+        self.assertEqual(funcs[0].length, 4)
 
     def test_async_function(self):
         source = """async def bar():
@@ -69,7 +69,7 @@ class TestFindFunctionLengths(unittest.TestCase):
 """
         funcs = find_function_lengths(source)
         self.assertEqual(len(funcs), 1)
-        self.assertEqual(funcs[0]["name"], "bar")
+        self.assertEqual(funcs[0].name, "bar")
 
 
 class TestFindUnusedImports(unittest.TestCase):
@@ -79,7 +79,7 @@ class TestFindUnusedImports(unittest.TestCase):
 data = json.loads('{}')
 """
         unused = find_unused_imports(source)
-        names = {u["name"] for u in unused}
+        names = {u.name for u in unused}
         self.assertNotIn("json", names)
 
     def test_used_import_not_reported(self):
@@ -87,7 +87,7 @@ data = json.loads('{}')
 os.getcwd()
 """
         unused = find_unused_imports(source)
-        names = {u["name"] for u in unused}
+        names = {u.name for u in unused}
         self.assertNotIn("os", names)
 
     def test_from_import(self):
@@ -96,7 +96,7 @@ os.getcwd()
 x = 1
 """
         unused = find_unused_imports(source)
-        names = {u["name"] for u in unused}
+        names = {u.name for u in unused}
         self.assertIn("typing.Optional", names)
         self.assertIn("typing.List", names)
 

@@ -88,14 +88,14 @@ class StyleAgent(BaseAgent):
     ) -> None:
         source = "\n".join(lines)
         for item in self.parser.find_naming_violations(source):
-            if item["kind"] == "class":
+            if item.kind == "class":
                 findings.append(
                     self.finding(
                         severity=Severity.LOW,
-                        message=f"Class name '{item['name']}' should use CapWords convention",
-                        suggestion=f"Rename to '{item['name'][0].upper() + item['name'][1:]}'",
+                        message=f"Class name '{item.name}' should use CapWords convention",
+                        suggestion=f"Rename to '{item.name[0].upper() + item.name[1:]}'",
                         file=path,
-                        line=item["line"],
+                        line=item.line,
                         rule_id="STY002",
                         category="style",
                     )
@@ -104,10 +104,10 @@ class StyleAgent(BaseAgent):
                 findings.append(
                     self.finding(
                         severity=Severity.LOW,
-                        message=f"Function name '{item['name']}' should use snake_case",
+                        message=f"Function name '{item.name}' should use snake_case",
                         suggestion="Function names should be lowercase with underscores",
                         file=path,
-                        line=item["line"],
+                        line=item.line,
                         rule_id="STY003",
                         category="style",
                     )
@@ -115,18 +115,18 @@ class StyleAgent(BaseAgent):
 
     def _check_missing_docstrings(self, findings: list[Finding], source: str, path: str) -> None:
         for item in self.parser.find_functions_with_docstrings(source):
-            if item["has_docstring"]:
+            if item.has_docstring:
                 continue
-            if item["type"] == "function" and item["name"].startswith("_"):
+            if item.type == "function" and item.name.startswith("_"):
                 continue
-            if item["type"] == "function":
+            if item.type == "function":
                 findings.append(
                     self.finding(
                         severity=Severity.INFO,
-                        message=f"Function '{item['name']}' is missing a docstring",
+                        message=f"Function '{item.name}' is missing a docstring",
                         suggestion="Add a docstring describing purpose, args, and returns",
                         file=path,
-                        line=item["line"],
+                        line=item.line,
                         rule_id="STY004",
                         category="style",
                     )
@@ -135,10 +135,10 @@ class StyleAgent(BaseAgent):
                 findings.append(
                     self.finding(
                         severity=Severity.INFO,
-                        message=f"Class '{item['name']}' is missing a docstring",
+                        message=f"Class '{item.name}' is missing a docstring",
                         suggestion="Add a docstring describing the class purpose",
                         file=path,
-                        line=item["line"],
+                        line=item.line,
                         rule_id="STY005",
                         category="style",
                     )
@@ -173,7 +173,7 @@ class StyleAgent(BaseAgent):
                     message="Unnecessary 'else' after return/raise/break",
                     suggestion=_suggestion,
                     file=path,
-                    line=item["line"],
+                    line=item.line,
                     rule_id="STY008",
                     category="style",
                 )
@@ -184,10 +184,10 @@ class StyleAgent(BaseAgent):
             findings.append(
                 self.finding(
                     severity=Severity.LOW,
-                    message=f"Function '{item['name']}' has mixed bare and valued returns",
+                    message=f"Function '{item.name}' has mixed bare and valued returns",
                     suggestion="Always return a value or use bare returns consistently",
                     file=path,
-                    line=item["line"],
+                    line=item.line,
                     rule_id="STY010",
                     category="style",
                 )
