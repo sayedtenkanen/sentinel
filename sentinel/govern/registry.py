@@ -210,4 +210,71 @@ class AgentRegistry:
                 tags=["optional", "llm", "hybrid"],
             )
         )
+        registry.register(
+            AgentInfo(
+                name="architecture",
+                description=(
+                    "Import graph analysis: circular dependencies, god modules,"
+                    " isolated modules, leaf modules. Uses AST-based import graph."
+                ),
+                version="1.0.0",
+                config_schema={
+                    "god_module_threshold": {
+                        "type": "int",
+                        "default": 10,
+                        "description": "Max imports before flagging a god module",
+                    },
+                },
+                capabilities=["architecture", "import-graph", "dependency-analysis"],
+                tags=["core", "architecture"],
+            )
+        )
+        registry.register(
+            AgentInfo(
+                name="refactor",
+                description=(
+                    "Refactor opportunity detection: composite score from complexity,"
+                    " length, and parameter count. Flags REF001 and REF002."
+                ),
+                version="1.0.0",
+                config_schema={
+                    "complexity_weight": {
+                        "type": "float",
+                        "default": 2.0,
+                        "description": "Weight for cyclomatic complexity in refactor score",
+                    },
+                    "length_weight": {
+                        "type": "float",
+                        "default": 1.0,
+                        "description": "Weight for function length in refactor score",
+                    },
+                    "param_weight": {
+                        "type": "float",
+                        "default": 1.5,
+                        "description": "Weight for parameter count in refactor score",
+                    },
+                    "refactor_threshold": {
+                        "type": "float",
+                        "default": 20.0,
+                        "description": "Minimum score to flag refactor opportunity",
+                    },
+                },
+                capabilities=["refactor", "complexity-analysis"],
+                tags=["core", "code-quality"],
+            )
+        )
+        registry.register(
+            AgentInfo(
+                name="risk-summary",
+                description=(
+                    "PR-level cross-file risk assessment. Aggregates findings across"
+                    " agents to detect risk concentration, cross-cutting security issues,"
+                    " and overall project risk."
+                ),
+                version="1.0.0",
+                config_schema={},
+                capabilities=["risk-assessment", "aggregation", "reporting"],
+                tags=["core", "reporting"],
+            )
+        )
         return registry

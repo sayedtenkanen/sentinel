@@ -72,9 +72,14 @@ python -m sentinel.test.simulations
                │  │  │analysis││rity  ││     ││prac │  │    │
                │  │  └───┬────┘└──┬───┘└──┬──┘└──┬──┘  │    │
                │  │       │        │       │      │     │    │
-               │  │       v        v       v      v     │    │
-               │  │  ┌─────────────────────────────┐    │    │
-               │  │  │   llm-review (optional)      │    │    │
+                │  │       v        v       v      v     │    │
+                │  │  ┌─────────────────────────────┐    │    │
+                │  │  │ architecture + refactor       │    │    │
+                │  │  │ (static, per-file)            │    │    │
+                │  │  └──────────────┬──────────────┘    │    │
+                │  │                 │                   │    │
+                │  │  ┌─────────────────────────────┐    │    │
+                │  │  │   llm-review (optional)      │    │    │
                │  │  │   ┌─────────────────┐       │    │    │
                │  │  │   │   Retriever      │◄─────│────│────│──── RAG KB
                │  │  │   │  (TF-IDF cos sim)│      │    │    │
@@ -91,11 +96,18 @@ python -m sentinel.test.simulations
                └──────────────────┼───────────────────────────┘
                                  │ AgentResult[]
                                  v
-                             ┌──────────────────┐
-                             │    SummaryAgent   │
-                             │  (score + verdict)│
-                             └────────┬─────────┘
-                                      │
+                              ┌──────────────────┐
+                              │    SummaryAgent   │
+                              │  (score + verdict)│
+                              └────────┬─────────┘
+                                       │ summary + risk
+                                       v
+                              ┌─────────────────────┐
+                              │   Risk Summary       │
+                              │  (assess_risk cross  │
+                              │   file aggregation)  │
+                              └──────────┬──────────┘
+                                         │
                     ┌─────────────────┼─────────────────┐
                     │                 │                  │
                     v                 v                  v
@@ -127,12 +139,15 @@ python -m sentinel.test.simulations
 ## Agents
 
 | Agent | Rules | Checks |
-|---|---|---|
+|---|---|---|---|
 | **static-analysis** | 9 | Cyclomatic complexity, line length, nesting depth, unused imports, trailing whitespace |
 | **security** | 32 + secret scanner | eval/exec, pickle, SQLi, XSS, SSTI, hardcoded creds, JWT, AWS keys, weak crypto, XXE, and more |
 | **style** | 6 | Import ordering, naming conventions (CapWords/snake_case), docstrings, magic numbers, is-vs-== |
 | **best-practices** | 5 | Bare excepts, lambda assignments, mutable defaults, globals, type hints, context managers |
 | **documentation** | 6 | Module/function/class docstrings, inline comment coverage |
+| **architecture** | 4 (ARC001-004) | Circular dependencies, god modules, isolated/leaf modules via AST import graph |
+| **refactor** | 2 (REF001-002) | Composite refactor score from complexity, length, and parameter count |
+| **risk-summary** | 5 (RSK001-005) | PR-level cross-file risk concentration, cross-cutting security, architecture risk, overall risk |
 | **llm-review** | optional | LLM-powered review with RAG context retrieval. Requires `--llm-api-key`. Uses TF-IDF cosine similarity to find similar past findings + sends context to OpenAI-compatible API |
 
 ## ADLC Phases
@@ -144,10 +159,10 @@ The project is organized around the five phases of the [Agent Development Lifecy
 Agent source code, tools, and orchestration framework.
 
 | Module | Files | Purpose |
-|---|---|---|
-| `sentinel/agents/` | `static_analysis.py`, `security.py`, `style.py`, `best_practices.py`, `documentation.py`, `summary.py`, `llm_review.py` | 7 sub-agents — each has a self-contained `analyze()` method returning `list[Finding]`. `llm-review` is optional (requires `--llm-api-key`) |
+|---|---|---|---|
+| `sentinel/agents/` | `static_analysis.py`, `security.py`, `style.py`, `best_practices.py`, `documentation.py`, `architecture.py`, `refactor.py`, `summary.py`, `llm_review.py` | 9 sub-agents — each has a self-contained `analyze()` method returning `list[Finding]`. `architecture` and `refactor` run automatically; `llm-review` is optional (requires `--llm-api-key`) |
 | `sentinel/core/` | `orchestrator.py`, `base_agent.py`, `context.py`, `types.py` | Orchestrator coordinates agents via two-level parallelism (file-level + agent-level), `BaseAgent` abstract class with `run()` lifecycle, `FileContext`/`ReviewReport`/`Finding` data models |
-| `sentinel/tools/` | `ast_tools.py`, `config.py`, `git_tools.py`, `secrets_scanner.py` | AST complexity analysis, `.code-review.json` config loader, diff parsing, standalone secrets scanner (20+ patterns) |
+| `sentinel/tools/` | `ast_tools.py`, `import_graph.py`, `config.py`, `git_tools.py`, `secrets_scanner.py` | AST complexity analysis, import dependency graph builder, `.code-review.json` config loader, diff parsing, standalone secrets scanner (20+ patterns) |
 | `sentinel/rag/` | `vector_store.py`, `knowledge_base.py`, `retriever.py` | TF-IDF vector store (pure Python), code chunking + knowledge base, similarity search + RAG prompt builder |
 | **Design** | | Zero external dependencies (pure stdlib). Agents are stateless and thread-safe. Parallelism via `ThreadPoolExecutor` with separate file and agent pools to avoid deadlock. RAG uses pure Python TF-IDF vector store with cosine similarity — no external vector DB needed. |
 
@@ -164,11 +179,11 @@ python -m sentinel.deploy.runner path/to/file.py --llm-api-key sk-... --rag-kb-d
 Regression datasets, eval suite, simulation engine, and unit tests.
 
 | Component | Files | Purpose |
-|---|---|---|
+|---|---|---|---|
 | **Eval datasets** | `sentinel/test/fixtures/good_code.py`, `bad_code.py` | Known-good (4 findings) and known-bad (89 findings) fixtures for regression testing |
 | **Eval runner** | `sentinel/test/evals.py` | Scores 100% when both datasets match expected finding counts |
 | **Simulation engine** | `sentinel/test/simulations.py` | 3 multi-turn scenarios (bad→good, no-regression, severity improves), 6/6 steps |
-| **Unit tests** | `tests/test_*.py` (15 files) | 371 tests covering all agents, tools, orchestrator, cost tracker, tracer, dashboard, context hub, registry, RAG |
+| **Unit tests** | `tests/test_*.py` (25 files) | 570 tests covering all agents, tools, orchestrator, cost tracker, tracer, dashboard, context hub, registry, RAG, import graph, rule miner, architecture, refactor, risk summary |
 
 ```bash
 python -m sentinel.test.evals
@@ -215,7 +230,7 @@ Cost governance, agent registry, and policy enforcement.
 | Component | Files | Purpose |
 |---|---|---|
 | **CostTracker** | `sentinel/govern/cost.py` | Per-agent cost rates (static agents cost $0, LLM agents configurable), cost caps via `--cost-cap`, summary line in report. Thread-safe with reentrant lock |
-| **AgentRegistry** | `sentinel/govern/registry.py` | `AgentRegistry.default()` registers all 7 agents with config schemas, `list_agents()`, `find_by_tag()`, `find_by_capability()`, discovery metadata |
+| **AgentRegistry** | `sentinel/govern/registry.py` | `AgentRegistry.default()` registers all 11 agents with config schemas, `list_agents()`, `find_by_tag()`, `find_by_capability()`, discovery metadata |
 | **Suppress rules** | `.code-review.json` + `runner.py` | fnmatch-based suppression on `rule_id` + `file` pattern, applied after review via `suppress_findings()` |
 | **Audit** | Trace files + tracer | Every `run.started`/`run.completed`/`review.completed` event logged with duration, finding count, cost, errors — full JSON audit trail |
 

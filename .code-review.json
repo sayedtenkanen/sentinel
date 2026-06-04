@@ -22,6 +22,15 @@
             "max_line_length": 120,
             "max_nesting_depth": 8,
             "max_params": 12
+        },
+        "architecture": {
+            "god_module_threshold": 10
+        },
+        "refactor": {
+            "complexity_weight": 2.0,
+            "length_weight": 1.0,
+            "param_weight": 1.5,
+            "refactor_threshold": 20.0
         }
     },
     "output": {

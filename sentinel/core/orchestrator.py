@@ -5,8 +5,10 @@ from __future__ import annotations
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from ..agents.architecture import ArchitectureAgent
 from ..agents.best_practices import BestPracticesAgent
 from ..agents.documentation import DocumentationAgent
+from ..agents.refactor import RefactorAgent
 from ..agents.security import SecurityAgent
 from ..agents.static_analysis import StaticAnalysisAgent
 from ..agents.style import StyleAgent
@@ -40,6 +42,8 @@ class Orchestrator:
             StyleAgent(),
             BestPracticesAgent(),
             DocumentationAgent(),
+            ArchitectureAgent(),
+            RefactorAgent(),
         ]
         self.summary_agent = SummaryAgent()
         self.tracer = tracer or Tracer()

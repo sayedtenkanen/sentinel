@@ -131,7 +131,15 @@ eval("os.system('ls')")
         ctx = ReviewContext.from_file("test.py", "x = 1")
         report = orch.review(ctx)
         names = [r.agent_name for r in report.agent_results]
-        expected = ["static-analysis", "security", "style", "best-practices", "documentation"]
+        expected = [
+            "static-analysis",
+            "security",
+            "style",
+            "best-practices",
+            "documentation",
+            "architecture",
+            "refactor",
+        ]
         self.assertEqual(names, expected)
 
     def test_parallel_multi_file_ordering(self):
@@ -142,9 +150,17 @@ eval("os.system('ls')")
         ]
         ctx = ReviewContext(files=files)
         report = orch.review(ctx)
-        expected = ["static-analysis", "security", "style", "best-practices", "documentation"]
-        names_a = [r.agent_name for r in report.agent_results[:5]]
-        names_b = [r.agent_name for r in report.agent_results[5:]]
+        expected = [
+            "static-analysis",
+            "security",
+            "style",
+            "best-practices",
+            "documentation",
+            "architecture",
+            "refactor",
+        ]
+        names_a = [r.agent_name for r in report.agent_results[:7]]
+        names_b = [r.agent_name for r in report.agent_results[7:]]
         self.assertEqual(names_a, expected)
         self.assertEqual(names_b, expected)
 

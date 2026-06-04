@@ -31,7 +31,7 @@ python -m sentinel.deploy.runner file.py -o report.md
 # Disable specific agents
 python -m sentinel.deploy.runner file.py --disable-agent security --disable-agent style
 
-# Available agents: static-analysis, security, style, best-practices, documentation
+# Available agents: static-analysis, security, style, best-practices, documentation, architecture, refactor
 ```
 
 ## Tracing & Feedback
@@ -59,11 +59,12 @@ python -m sentinel.monitor.dashboard --port 8080 --trace-dir ./traces
 ```
 sentinel/
 ├── core/           # Base agent, orchestrator, types, context
-├── agents/         # Sub-agents (static analysis, security, style, etc.)
-├── tools/          # AST parsing, git diff, config loader, secrets scanner
+├── agents/         # Sub-agents (static analysis, security, style, architecture, refactor, etc.)
+├── tools/          # AST parsing, import graph, git diff, config loader, secrets scanner, sandbox
 ├── reporting/      # Markdown and JSON report generators
+├── rag/            # TF-IDF vector store, knowledge base, retriever
 ├── monitor/        # Tracer + Dashboard (Monitor phase)
-├── govern/         # Cost tracker, context hub, agent registry (Govern/Deploy)
+├── govern/         # Cost tracker, context hub, agent registry, rule miner (Govern/Deploy)
 ├── test/
 │   ├── evals.py    # ADLC Test phase: eval suite
 │   ├── simulations.py  # Multi-turn synthetic interaction tests
@@ -98,14 +99,14 @@ class YourAgent(BaseAgent):
 
 1. Add a new `_check_*` method to the agent class
 2. Call it from the `analyze()` method
-3. Use a unique `rule_id` following the existing scheme (ST*, SEC*, STY*, BP*, DOC*)
+3. Use a unique `rule_id` following the existing scheme (ST*, SEC*, STY*, BP*, DOC*, ARC*, REF*, RSK*)
 4. Add a matching anti-pattern to `test/fixtures/bad_code.py`
 5. Add a unit test in `tests/test_agents.py`
 
 ## Running Tests
 
 ```bash
-# Unit tests (264 total)
+# Unit tests (570 total)
 python -m unittest discover -s tests/ -v
 
 # ADLC eval suite

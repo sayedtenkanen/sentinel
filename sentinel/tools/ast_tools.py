@@ -64,17 +64,28 @@ def find_function_lengths(source: str) -> list[dict[str, Any]]:
     results = []
     try:
         tree = ast.parse(source)
-        source.split("\n")
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 start = node.lineno or 0
                 end = node.end_lineno or start
                 length = end - start + 1
+                visitor = ComplexityVisitor()
+                visitor.visit(node)
+                params = len(node.args.args) + len(node.args.posonlyargs)
+                if node.args.vararg:
+                    params += 1
+                if node.args.kwonlyargs:
+                    params += len(node.args.kwonlyargs)
+                if node.args.kwarg:
+                    params += 1
                 results.append(
                     {
                         "name": node.name,
                         "line": start,
                         "length": length,
+                        "complexity": visitor.complexity,
+                        "nesting": visitor.max_nesting,
+                        "params": params,
                     }
                 )
     except SyntaxError:

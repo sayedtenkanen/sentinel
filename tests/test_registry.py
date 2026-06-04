@@ -84,7 +84,7 @@ class TestAgentRegistry(unittest.TestCase):
 
     def test_default_registry(self):
         registry = AgentRegistry.default()
-        self.assertEqual(len(registry.list_agents()), 8)
+        self.assertEqual(len(registry.list_agents()), 11)
         self.assertIsNotNone(registry.get("static-analysis"))
         self.assertIsNotNone(registry.get("security"))
         self.assertIsNotNone(registry.get("style"))
@@ -93,6 +93,9 @@ class TestAgentRegistry(unittest.TestCase):
         self.assertIsNotNone(registry.get("summary"))
         self.assertIsNotNone(registry.get("llm-review"))
         self.assertIsNotNone(registry.get("execution"))
+        self.assertIsNotNone(registry.get("architecture"))
+        self.assertIsNotNone(registry.get("refactor"))
+        self.assertIsNotNone(registry.get("risk-summary"))
 
     def test_agent_find_multiple_tags(self):
         a = AgentInfo(name="multi", description="", tags=["core", "docs", "security"])

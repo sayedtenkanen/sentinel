@@ -140,5 +140,29 @@ def default_registry() -> ToolRegistry:
     )
     reg.register(git_tools.parse_diff, name="parse_diff")
     reg.register(git_tools.detect_language, name="detect_language")
+
+    from .import_graph import ImportGraph
+
+    ig = ImportGraph()
+    reg.register(
+        ig.add_file,
+        name="import_graph_add_file",
+        description="Add a file's imports to the dependency graph",
+    )
+    reg.register(
+        ig.find_cycles,
+        name="import_graph_find_cycles",
+        description="Find circular dependencies in the import graph",
+    )
+    reg.register(
+        ig.find_god_modules,
+        name="import_graph_find_god_modules",
+        description="Find modules that import too many other modules",
+    )
+    reg.register(
+        ig.coupling_summary,
+        name="import_graph_summary",
+        description="Get a summary of module coupling metrics",
+    )
     _default_registry = reg
     return reg

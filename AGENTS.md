@@ -15,6 +15,9 @@ sentinel/
 │   ├── style.py            # Import order, naming conventions, docstrings, magic numbers
 │   ├── best_practices.py   # Bare excepts, mutable defaults, globals, type hints, context mgrs
 │   ├── documentation.py    # Module/function/class docstrings, comment coverage
+│   ├── architecture.py     # Import graph analysis: cycles, god modules, coupling
+│   ├── refactor.py         # Refactor opportunity detection (composite score)
+│   ├── risk_summary.py     # PR-level cross-file risk assessment (RSK001-005)
 │   ├── execution_agent.py  # Hybrid tool + sandboxed code execution agent (decision policy, iterative fix)
 │   ├── llm_review.py       # Optional LLM-powered review with RAG context retrieval
 │   └── summary.py          # Compiles final verdict, severity breakdown, cost summary
@@ -24,6 +27,7 @@ sentinel/
 │   └── retriever.py        # Similarity search + RAG prompt builder for agents
 ├── tools/
 │   ├── ast_tools.py        # AST-based complexity, function length, unused import detection
+│   ├── import_graph.py     # AST-based import dependency graph builder (cycles, coupling, god modules)
 │   ├── config.py           # .code-review.json loader with filter/suppress/matches helpers
 │   ├── git_tools.py        # Diff parsing, language detection
 │   ├── sandbox.py          # Secure Python execution sandbox (restricted exec, timeout, import allow-list)
@@ -37,7 +41,8 @@ sentinel/
 ├── govern/
 │   ├── cost.py             # CostTracker — per-agent cost tracking with caps (Govern phase)
 │   ├── context_hub.py      # ContextHub — versioned profiles for rules, policies, prompts (Deploy)
-│   └── registry.py         # AgentRegistry — discoverable agent info with config schemas (Govern)
+│   ├── registry.py         # AgentRegistry — discoverable agent info with config schemas (Govern)
+│   └── rule_miner.py       # Offline knowledge base mining for new rule suggestions
 ├── test/
 │   ├── evals.py            # Eval suite runner with pass/fail scoring
 │   ├── simulations.py      # Simulation engine — multi-turn synthetic interaction testing
@@ -52,11 +57,11 @@ sentinel/
 
 | ADLC Phase | Implementation | Status |
 |---|---|---|
-| **Build** | 8 sub-agents (static-analysis, security, style, best-practices, documentation, execution-agent, llm-review, summary) + RAG (TF-IDF vector store, knowledge base, retriever) + orchestrator + tools + sandbox + tool registry | ✅ Complete (execution agent added) |
-| **Test** | `test/evals.py` (2 fixtures, 100% score), `test/simulations.py` (3 scenarios, 6/6 steps), 371 unit tests | ✅ Complete (RAG tests added) |
+| **Build** | 10 sub-agents (static-analysis, security, style, best-practices, documentation, architecture, refactor, summary) + optional (llm-review, execution-agent) + RAG (TF-IDF vector store, knowledge base, retriever) + risk-summary + orchestrator + tools (import-graph) + sandbox + tool registry | ✅ Complete (architecture + refactor + risk-summary + import-graph added) |
+| **Test** | `test/evals.py` (2 fixtures, 100% score), `test/simulations.py` (3 scenarios, 6/6 steps), 570 unit tests | ✅ Complete (architecture/refactor/risk-summary/import-graph/rule-miner tests added) |
 | **Deploy** | `deploy/runner.py` CLI with `--format`, `--output`, `--disable-agent`, `--trace-dir`, `--config`, `--cost-cap`, `--feedback`, `--workers`, `--llm-api-key`, `--llm-model`, `--rag-kb-dir`; `govern/context_hub.py` for versioned profiles | ✅ Complete (LLM + RAG flags added) |
 | **Monitor** | `monitor/tracer.py` captures trace events + metrics + feedbacks; `monitor/dashboard.py` HTML/JSON dashboard with `/api/feedback` POST endpoint | ✅ Complete (feedback pipeline added) |
-| **Govern** | `--disable-agent`, `suppress` rules, severity-weighted scoring, JSON audit trails; `govern/cost.py` cost caps; `govern/registry.py` agent discoverability (7 agents) | ✅ Complete (cost + registry added) |
+| **Govern** | `--disable-agent`, `suppress` rules, severity-weighted scoring, JSON audit trails; `govern/cost.py` cost caps; `govern/registry.py` agent discoverability (11 agents) | ✅ Complete (cost + registry added) |
 
 ## CLI Usage
 
@@ -99,6 +104,12 @@ python -m sentinel.deploy.runner path/to/file.py --llm-api-key sk-... --sandbox-
 
 # Disable execution agent but keep LLM review
 python -m sentinel.deploy.runner path/to/file.py --llm-api-key sk-... --disable-agent execution
+
+# Disable architecture or refactor agents
+python -m sentinel.deploy.runner path/to/file.py --disable-agent architecture --disable-agent refactor
+
+# Run rule miner on a knowledge base
+python -m sentinel.govern.rule_miner --kb-dir ./kb
 
 # Dashboard
 python -m sentinel.monitor.dashboard --port 8080 --trace-dir ./traces
@@ -144,7 +155,7 @@ git config core.hooksPath .githooks
 SKIP=lint,format,ty,secrets,coverage git commit -m "skip all hooks"
 ```
 
-Expected: 100% on both good_code and bad_code fixtures, **371 tests passing**, 3/3 simulation scenarios passing, 85%+ coverage, zero ruff/ty errors.
+Expected: 100% on both good_code and bad_code fixtures, **570 tests passing**, 3/3 simulation scenarios passing, 85%+ coverage, zero ruff/ty errors.
 
 ## Hybrid Execution Agent
 
@@ -156,7 +167,7 @@ The execution agent (`sentinel/agents/execution_agent.py`) implements the **prod
 4. **Direct tools** — exposed via `ToolRegistry` wrapping `sentinel/tools/` functions with auto-detected signatures
 5. **Safety** — sandbox blocks `os`, `sys`, `subprocess`, `socket`, `ctypes`, `open`, `eval`, `exec`, `compile`; only allow-listed stdlib modules permitted
 
-Key design: the execution agent complements (does not replace) the 5 deterministic static agents. It handles cross-cutting analysis that requires dynamic code, custom filtering, or tool composition.
+Key design: the execution agent complements (does not replace) the 7 deterministic static agents. It handles cross-cutting analysis that requires dynamic code, custom filtering, or tool composition.
 
 ## ADLC Gaps (All Resolved)
 
@@ -172,6 +183,11 @@ Key design: the execution agent complements (does not replace) the 5 determinist
 | **Hybrid Execution Agent** (Build) | `sentinel/agents/execution_agent.py` — hybrid tool + sandboxed code execution with decision policy and iterative fix loop |
 | **Secure Sandbox** (Build) | `sentinel/tools/sandbox.py` — restricted Python exec with import allow-list, timeout, stdout capture |
 | **Tool Registry** (Build) | `sentinel/tools/tool_registry.py` — discoverable direct tools wrapping `sentinel/tools/` functions |
+| **Import Graph Tool** (Build) | `sentinel/tools/import_graph.py` — AST-based import dependency graph builder with cycle detection, fan-in/out, god modules |
+| **Architecture Agent** (Build) | `sentinel/agents/architecture.py` — deterministic import graph analysis: cycles (ARC001), god modules (ARC002), isolated (ARC003), leaf (ARC004) |
+| **Refactor Agent** (Build) | `sentinel/agents/refactor.py` — deterministic composite score from complexity/length/params, REF001 (medium/high) + REF002 (critical) |
+| **Risk Summary** (Build) | `sentinel/agents/risk_summary.py` — PR-level cross-file risk aggregation: concentration (RSK001-002), cross-cutting security (RSK003), architecture risk (RSK004), overall risk (RSK005) |
+| **Rule Miner** (Govern) | `sentinel/govern/rule_miner.py` — offline knowledge base mining for new rule suggestions, invoked via `python -m sentinel.govern.rule_miner --kb-dir ./kb` |
 
 ## Key Design Decisions
 
@@ -185,7 +201,6 @@ Key design: the execution agent complements (does not replace) the 5 determinist
 - **Agent Registry** provides a static `default()` with all built-in agents and their config schemas.
 - **Eval datasets mirror production** — good_code and bad_code fixtures serve as regression dataset per the ADLC article: *"Datasets are how teams preserve what they learn."*
 - **Suppress rules** support fnmatch wildcards on both `rule` and `pattern` fields in `.code-review.json`.
-- **Parallel processing** — `--workers N` runs agents concurrently via `ThreadPoolExecutor`. Agents are stateless and thread-safe. Falls back to sequential when `max_workers` is `None`. Best suited when agents perform I/O or release the GIL (regex/AST parsing).
 - **RAG is pure Python** — TF-IDF vector store with cosine similarity, no external dependencies. Knowledge base persists as JSON files under `--rag-kb-dir`.
 - **LLM agent is optional** — skipped entirely when `--llm-api-key` is not provided. Zero overhead when not in use.
 - **Secrets scanner skips test files** in pre-commit hook to avoid false positives on fake API keys in tests.

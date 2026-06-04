@@ -77,6 +77,8 @@ def create_parser() -> argparse.ArgumentParser:
             "style",
             "best-practices",
             "documentation",
+            "architecture",
+            "refactor",
             "llm-review",
             "execution",
         ],
@@ -161,14 +163,18 @@ def create_parser() -> argparse.ArgumentParser:
 
 
 def _setup_agents(cfg: dict, disabled: set[str], args: argparse.Namespace | None = None) -> list:
+    from ..agents.architecture import ArchitectureAgent
     from ..agents.best_practices import BestPracticesAgent
     from ..agents.documentation import DocumentationAgent
+    from ..agents.refactor import RefactorAgent
     from ..agents.security import SecurityAgent
     from ..agents.static_analysis import StaticAnalysisAgent
     from ..agents.style import StyleAgent
     from ..core.base_agent import BaseAgent
 
     sa_cfg = agent_config(cfg, "static-analysis")
+    arch_cfg = agent_config(cfg, "architecture")
+    ref_cfg = agent_config(cfg, "refactor")
     agents: list[BaseAgent] = [
         StaticAnalysisAgent(
             enabled="static-analysis" not in disabled,
@@ -182,6 +188,17 @@ def _setup_agents(cfg: dict, disabled: set[str], args: argparse.Namespace | None
         StyleAgent(enabled="style" not in disabled),
         BestPracticesAgent(enabled="best-practices" not in disabled),
         DocumentationAgent(enabled="documentation" not in disabled),
+        ArchitectureAgent(
+            enabled="architecture" not in disabled,
+            god_module_threshold=arch_cfg.get("god_module_threshold", 10),
+        ),
+        RefactorAgent(
+            enabled="refactor" not in disabled,
+            complexity_weight=ref_cfg.get("complexity_weight", 2.0),
+            length_weight=ref_cfg.get("length_weight", 1.0),
+            param_weight=ref_cfg.get("param_weight", 1.5),
+            refactor_threshold=ref_cfg.get("refactor_threshold", 20.0),
+        ),
     ]
 
     if args and not args.llm_api_key:
@@ -308,6 +325,14 @@ def main(argv: list[str] | None = None) -> int:
         for result in report.agent_results:
             result.findings = suppress_findings(result.findings, cfg)
     summary_text = orchestrator.summarize(report)
+
+    from ..agents.risk_summary import assess_risk, format_risk_summary
+
+    risk_items = assess_risk(report)
+    risk_text = format_risk_summary(risk_items)
+
+    if args.format == "markdown":
+        summary_text += "\n\n" + risk_text
 
     if args.verbose:
         _print_trace_summary(tracer)
