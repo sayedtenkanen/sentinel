@@ -1,6 +1,8 @@
 # Sentinel
 
-**Autonomous code review bot** — built with sub-agents following the [Agent Development Lifecycle](https://blog.langchain.dev/the-agent-development-lifecycle/) (ADLC) by Harrison Chase.
+**Autonomous Python code review bot** — 10 agents analyzing `.py` files for security, style, complexity, architecture, and risk.
+
+**Python only.** Only `.py` files are discovered and analyzed. Other languages are ignored.
 
 Zero external dependencies. Pure Python stdlib.
 

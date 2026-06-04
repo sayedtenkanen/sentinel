@@ -1,5 +1,7 @@
 # Code Review Bot — Development Reference
 
+> **Python only.** Only `.py` files are discovered and analyzed. Other languages are ignored.
+
 ## Project Structure
 
 ```
