@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import ast
-import re
-
 from ..core.base_agent import BaseAgent
 from ..core.types import FileContext, Finding, Severity
+from ..parsers import PythonParser
+from ..parsers.base import BaseParser
 from ..tools.ast_tools import (
     compute_complexity,
     find_function_lengths,
@@ -24,6 +23,7 @@ class StaticAnalysisAgent(BaseAgent):
         max_line_length: int = 100,
         max_nesting_depth: int = 6,
         max_params: int = 8,
+        parser: BaseParser | None = None,
     ) -> None:
         super().__init__(name="static-analysis", enabled=enabled)
         self.complexity_threshold = complexity_threshold
@@ -31,6 +31,7 @@ class StaticAnalysisAgent(BaseAgent):
         self.max_line_length = max_line_length
         self.max_nesting_depth = max_nesting_depth
         self.max_params = max_params
+        self.parser = parser or PythonParser()
 
     def analyze(self, file: FileContext) -> list[Finding]:
         findings: list[Finding] = []
@@ -166,98 +167,41 @@ class StaticAnalysisAgent(BaseAgent):
                 blank_count = 0
 
     def _check_too_many_params(self, findings: list[Finding], source: str, path: str) -> None:
-        try:
-            tree = ast.parse(source)
-            for node in ast.walk(tree):
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    param_count = len(node.args.args) + len(node.args.kwonlyargs)
-                    if node.args.vararg:
-                        param_count += 1
-                    if node.args.kwarg:
-                        param_count += 1
-                    if param_count > self.max_params:
-                        findings.append(
-                            self.finding(
-                                severity=Severity.MEDIUM,
-                                message=f"'{node.name}' has {param_count} params (limit: {self.max_params})",
-                                suggestion="Use a dataclass or split into smaller functions",
-                                file=path,
-                                line=node.lineno or 0,
-                                rule_id="ST008",
-                                category="complexity",
-                            )
-                        )
-        except SyntaxError:
-            pass
+        for func in self.parser.find_too_many_params(source, self.max_params):
+            findings.append(
+                self.finding(
+                    severity=Severity.MEDIUM,
+                    message=f"'{func['name']}' has {func['params']} params (limit: {self.max_params})",
+                    suggestion="Use a dataclass or split into smaller functions",
+                    file=path,
+                    line=func["line"],
+                    rule_id="ST008",
+                    category="complexity",
+                )
+            )
 
     def _check_shadowed_builtins(
         self, findings: list[Finding], lines: list[str], path: str
     ) -> None:
+        source = "\n".join(lines)
         builtins = {
-            "list",
-            "dict",
-            "str",
-            "int",
-            "float",
-            "bool",
-            "set",
-            "tuple",
-            "type",
-            "object",
-            "input",
-            "print",
-            "len",
-            "range",
-            "map",
-            "filter",
-            "zip",
-            "open",
-            "file",
-            "id",
-            "eval",
-            "exec",
-            "max",
-            "min",
-            "sum",
-            "any",
-            "all",
-            "abs",
-            "round",
-            "sorted",
-            "reversed",
-            "enumerate",
-            "iter",
-            "next",
-            "property",
-            "staticmethod",
-            "classmethod",
-            "super",
-            "Exception",
-            "BaseException",
-            "ValueError",
-            "TypeError",
-            "KeyError",
-            "IndexError",
-            "AttributeError",
-            "ImportError",
+            "list", "dict", "str", "int", "float", "bool", "set", "tuple",
+            "type", "object", "input", "print", "len", "range", "map", "filter",
+            "zip", "open", "file", "id", "eval", "exec", "max", "min", "sum",
+            "any", "all", "abs", "round", "sorted", "reversed", "enumerate",
+            "iter", "next", "property", "staticmethod", "classmethod", "super",
+            "Exception", "BaseException", "ValueError", "TypeError", "KeyError",
+            "IndexError", "AttributeError", "ImportError",
         }
-        for i, line in enumerate(lines, 1):
-            stripped = line.strip()
-            match = re.match(
-                r"(?:class|def)\s+(" + "|".join(sorted(builtins, key=len, reverse=True)) + r")\b",
-                stripped,
-            )
-            if match:
-                name = match.group(1)
-                findings.append(
-                    self.finding(
-                        severity=Severity.MEDIUM,
-                        message=f"Name '{name}' shadows Python built-in",
-                        suggestion=f"Rename '{name}' to avoid shadowing the built-in",
-                        file=path,
-                        line=i,
-                        code_snippet=stripped,
-                        rule_id="ST009",
-                        category="correctness",
-                    )
+        for item in self.parser.find_shadowed_builtins(source, builtins):
+            findings.append(
+                self.finding(
+                    severity=Severity.MEDIUM,
+                    message=f"Name '{item['name']}' shadows Python built-in",
+                    suggestion=f"Rename '{item['name']}' to avoid shadowing the built-in",
+                    file=path,
+                    line=item["line"],
+                    rule_id="ST009",
+                    category="correctness",
                 )
+            )

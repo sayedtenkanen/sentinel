@@ -2,51 +2,54 @@
 
 import unittest
 
-from sentinel.tools.import_graph import ImportGraph, parse_imports
+from sentinel.parsers.python import PythonParser
+from sentinel.tools.import_graph import ImportGraph
+
+_PARSER = PythonParser()
 
 
 class TestParseImports(unittest.TestCase):
     def test_simple_import(self):
-        imports = parse_imports("import os\nimport sys\n")
+        imports = _PARSER.parse_imports("import os\nimport sys\n")
         self.assertIn("os", imports)
         self.assertIn("sys", imports)
 
     def test_from_import(self):
-        imports = parse_imports("from collections import Counter, defaultdict")
+        imports = _PARSER.parse_imports("from collections import Counter, defaultdict")
         self.assertIn("collections", imports)
 
     def test_stdlib_vs_third_party(self):
-        imports = parse_imports("import json\nimport requests\nimport flask")
+        imports = _PARSER.parse_imports("import json\nimport requests\nimport flask")
         self.assertIn("json", imports)
         self.assertIn("requests", imports)
         self.assertIn("flask", imports)
 
     def test_relative_import(self):
-        imports = parse_imports("from . import utils")
+        imports = _PARSER.parse_imports("from . import utils")
         self.assertEqual(imports, [])
 
     def test_no_imports(self):
-        imports = parse_imports("x = 1\nprint(x)\n")
+        imports = _PARSER.parse_imports("x = 1\nprint(x)\n")
         self.assertEqual(imports, [])
 
     def test_syntax_error(self):
-        imports = parse_imports("x = 1 + ")
+        imports = _PARSER.parse_imports("x = 1 + ")
         self.assertEqual(imports, [])
 
     def test_empty(self):
-        imports = parse_imports("")
+        imports = _PARSER.parse_imports("")
         self.assertEqual(imports, [])
 
     def test_import_as(self):
-        imports = parse_imports("import numpy as np")
+        imports = _PARSER.parse_imports("import numpy as np")
         self.assertIn("numpy", imports)
 
     def test_submodule_import(self):
-        imports = parse_imports("import os.path")
+        imports = _PARSER.parse_imports("import os.path")
         self.assertIn("os", imports)
 
     def test_unique_imports(self):
-        imports = parse_imports("import os\nimport os\nimport sys\n")
+        imports = _PARSER.parse_imports("import os\nimport os\nimport sys\n")
         self.assertEqual(len(imports), 2)
 
 

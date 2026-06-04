@@ -2,49 +2,27 @@
 
 from __future__ import annotations
 
-import ast
 import re
 
 from ..core.base_agent import BaseAgent
 from ..core.types import FileContext, Finding, Severity
+from ..parsers import PythonParser
+from ..parsers.base import BaseParser
 from ..tools.git_tools import detect_language
 
 STDLIB_MODULES = {
-    "os",
-    "sys",
-    "re",
-    "json",
-    "math",
-    "datetime",
-    "pathlib",
-    "collections",
-    "functools",
-    "itertools",
-    "typing",
-    "abc",
-    "uuid",
-    "hashlib",
-    "base64",
-    "copy",
-    "enum",
-    "dataclasses",
-    "inspect",
-    "logging",
-    "argparse",
-    "subprocess",
-    "tempfile",
-    "threading",
-    "io",
-    "time",
-    "ast",
-    "concurrent",
-    "http",
+    "os", "sys", "re", "json", "math", "datetime", "pathlib",
+    "collections", "functools", "itertools", "typing", "abc", "uuid",
+    "hashlib", "base64", "copy", "enum", "dataclasses", "inspect",
+    "logging", "argparse", "subprocess", "tempfile", "threading", "io",
+    "time", "ast", "concurrent", "http",
 }
 
 
 class StyleAgent(BaseAgent):
-    def __init__(self, enabled: bool = True) -> None:
+    def __init__(self, enabled: bool = True, parser: BaseParser | None = None) -> None:
         super().__init__(name="style", enabled=enabled)
+        self.parser = parser or PythonParser()
 
     def analyze(self, file: FileContext) -> list[Finding]:
         findings: list[Finding] = []
@@ -108,84 +86,63 @@ class StyleAgent(BaseAgent):
     def _check_naming_conventions(
         self, findings: list[Finding], lines: list[str], path: str
     ) -> None:
-        for i, line in enumerate(lines, 1):
-            stripped = line.strip()
-
-            class_match = re.match(r"^class\s+(\w+)", stripped)
-            if class_match:
-                name = class_match.group(1)
-                if not re.match(r"^[A-Z][a-zA-Z0-9]*$", name):
-                    findings.append(
-                        self.finding(
-                            severity=Severity.LOW,
-                            message=f"Class name '{name}' should use CapWords convention",
-                            suggestion=f"Rename to '{name[0].upper() + name[1:]}'",
-                            file=path,
-                            line=i,
-                            code_snippet=stripped,
-                            rule_id="STY002",
-                            category="style",
-                        )
+        source = "\n".join(lines)
+        for item in self.parser.find_naming_violations(source):
+            if item["kind"] == "class":
+                findings.append(
+                    self.finding(
+                        severity=Severity.LOW,
+                        message=f"Class name '{item['name']}' should use CapWords convention",
+                        suggestion=f"Rename to '{item['name'][0].upper() + item['name'][1:]}'",
+                        file=path,
+                        line=item["line"],
+                        rule_id="STY002",
+                        category="style",
                     )
-
-            func_match = re.match(r"^def\s+(\w+)", stripped)
-            if func_match:
-                name = func_match.group(1)
-                if name[0].isupper() and name != "__init__":
-                    findings.append(
-                        self.finding(
-                            severity=Severity.LOW,
-                            message=f"Function name '{name}' should use snake_case",
-                            suggestion="Function names should be lowercase with underscores",
-                            file=path,
-                            line=i,
-                            code_snippet=stripped,
-                            rule_id="STY003",
-                            category="style",
-                        )
+                )
+            else:
+                findings.append(
+                    self.finding(
+                        severity=Severity.LOW,
+                        message=f"Function name '{item['name']}' should use snake_case",
+                        suggestion="Function names should be lowercase with underscores",
+                        file=path,
+                        line=item["line"],
+                        rule_id="STY003",
+                        category="style",
                     )
-
-    def _has_docstring(self, node: ast.AST) -> bool:
-        return (
-            isinstance(node.body[0], ast.Expr)
-            and isinstance(node.body[0].value, ast.Constant)
-            and isinstance(node.body[0].value.value, str)
-        )
+                )
 
     def _check_missing_docstrings(self, findings: list[Finding], source: str, path: str) -> None:
-        try:
-            tree = ast.parse(source)
-            for node in ast.walk(tree):
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    if self._has_docstring(node) or node.name.startswith("_"):
-                        continue
-                    findings.append(
-                        self.finding(
-                            severity=Severity.INFO,
-                            message=f"Function '{node.name}' is missing a docstring",
-                            suggestion="Add a docstring describing purpose, args, and returns",
-                            file=path,
-                            line=node.lineno or 0,
-                            rule_id="STY004",
-                            category="style",
-                        )
+        for item in self.parser.find_functions_with_docstrings(source):
+            if item["has_docstring"]:
+                continue
+            if item["type"] == "function" and item["name"].startswith("_"):
+                continue
+            if item["type"] == "function":
+                findings.append(
+                    self.finding(
+                        severity=Severity.INFO,
+                        message=f"Function '{item['name']}' is missing a docstring",
+                        suggestion="Add a docstring describing purpose, args, and returns",
+                        file=path,
+                        line=item["line"],
+                        rule_id="STY004",
+                        category="style",
                     )
-                elif isinstance(node, ast.ClassDef):
-                    if self._has_docstring(node):
-                        continue
-                    findings.append(
-                        self.finding(
-                            severity=Severity.INFO,
-                            message=f"Class '{node.name}' is missing a docstring",
-                            suggestion="Add a docstring describing the class purpose",
-                            file=path,
-                            line=node.lineno or 0,
-                            rule_id="STY005",
-                            category="style",
-                        )
+                )
+            else:
+                findings.append(
+                    self.finding(
+                        severity=Severity.INFO,
+                        message=f"Class '{item['name']}' is missing a docstring",
+                        suggestion="Add a docstring describing the class purpose",
+                        file=path,
+                        line=item["line"],
+                        rule_id="STY005",
+                        category="style",
                     )
-        except SyntaxError:
-            pass
+                )
 
     def _check_magic_numbers(self, findings: list[Finding], lines: list[str], path: str) -> None:
         for i, line in enumerate(lines, 1):
@@ -205,35 +162,36 @@ class StyleAgent(BaseAgent):
                 )
 
     def _check_unnecessary_else(self, findings: list[Finding], source: str, path: str) -> None:
-        try:
-            tree = ast.parse(source)
-            for node in ast.walk(tree):
-                if isinstance(node, ast.If):
-                    if not node.orelse:
-                        continue
-                    for stmt in node.body:
-                        if isinstance(stmt, (ast.Return, ast.Raise, ast.Break, ast.Continue)):
-                            for else_stmt in node.orelse:
-                                if isinstance(else_stmt, ast.If):
-                                    continue
-                            _suggestion = (
-                                "Remove 'else' and dedent the following block "
-                                "since the previous block never falls through"
-                            )
-                            findings.append(
-                                self.finding(
-                                    severity=Severity.INFO,
-                                    message="Unnecessary 'else' after return/raise/break",
-                                    suggestion=_suggestion,
-                                    file=path,
-                                    line=node.orelse[0].lineno or 0,
-                                    rule_id="STY008",
-                                    category="style",
-                                )
-                            )
-                            break
-        except SyntaxError:
-            pass
+        for item in self.parser.find_unnecessary_else(source):
+            _suggestion = (
+                "Remove 'else' and dedent the following block "
+                "since the previous block never falls through"
+            )
+            findings.append(
+                self.finding(
+                    severity=Severity.INFO,
+                    message="Unnecessary 'else' after return/raise/break",
+                    suggestion=_suggestion,
+                    file=path,
+                    line=item["line"],
+                    rule_id="STY008",
+                    category="style",
+                )
+            )
+
+    def _check_inconsistent_returns(self, findings: list[Finding], source: str, path: str) -> None:
+        for item in self.parser.find_inconsistent_returns(source):
+            findings.append(
+                self.finding(
+                    severity=Severity.LOW,
+                    message=f"Function '{item['name']}' has mixed bare and valued returns",
+                    suggestion="Always return a value or use bare returns consistently",
+                    file=path,
+                    line=item["line"],
+                    rule_id="STY010",
+                    category="style",
+                )
+            )
 
     def _check_empty_except(self, findings: list[Finding], lines: list[str], path: str) -> None:
         for i, line in enumerate(lines, 1):
@@ -251,34 +209,6 @@ class StyleAgent(BaseAgent):
                         category="correctness",
                     )
                 )
-
-    def _check_inconsistent_returns(self, findings: list[Finding], source: str, path: str) -> None:
-        try:
-            tree = ast.parse(source)
-            for node in ast.walk(tree):
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    has_explicit_return = False
-                    has_bare_return = False
-                    for child in ast.walk(node):
-                        if isinstance(child, ast.Return):
-                            if child.value is not None:
-                                has_explicit_return = True
-                            else:
-                                has_bare_return = True
-                    if has_explicit_return and has_bare_return:
-                        findings.append(
-                            self.finding(
-                                severity=Severity.LOW,
-                                message=f"Function '{node.name}' has mixed bare and valued returns",
-                                suggestion="Always return a value or use bare returns consistently",
-                                file=path,
-                                line=node.lineno or 0,
-                                rule_id="STY010",
-                                category="style",
-                            )
-                        )
-        except SyntaxError:
-            pass
 
     def _check_comparison_style(self, findings: list[Finding], lines: list[str], path: str) -> None:
         for i, line in enumerate(lines, 1):

@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
-import ast
 import re
 
 from ..core.base_agent import BaseAgent
 from ..core.types import FileContext, Finding, Severity
+from ..parsers import PythonParser
+from ..parsers.base import BaseParser
 from ..tools.git_tools import detect_language
 
 
 class DocumentationAgent(BaseAgent):
-    def __init__(self, enabled: bool = True) -> None:
+    def __init__(self, enabled: bool = True, parser: BaseParser | None = None) -> None:
         super().__init__(name="documentation", enabled=enabled)
+        self.parser = parser or PythonParser()
         self.redundant_comment_patterns = [
             (r"#\s*(increment|decrement)\s+\w+", "Descriptive comment on simple mutation"),
             (r"#\s*(set|get)\s+", "Trivial getter/setter comment"),
@@ -38,29 +40,18 @@ class DocumentationAgent(BaseAgent):
         return findings
 
     def _check_module_docstring(self, findings: list[Finding], source: str, path: str) -> None:
-        try:
-            tree = ast.parse(source)
-            if not tree.body:
-                return
-            has_docstring = (
-                isinstance(tree.body[0], ast.Expr)
-                and isinstance(tree.body[0].value, ast.Constant)
-                and isinstance(tree.body[0].value.value, str)
-            )
-            if not has_docstring and len(source.split("\n")) > 20:
-                findings.append(
-                    self.finding(
-                        severity=Severity.LOW,
-                        message="Module is missing a top-level docstring",
-                        suggestion="Add a module-level docstring describing this file's purpose",
-                        file=path,
-                        line=1,
-                        rule_id="DOC001",
-                        category="documentation",
-                    )
+        if not self.parser.find_module_has_docstring(source) and len(source.split("\n")) > 20:
+            findings.append(
+                self.finding(
+                    severity=Severity.LOW,
+                    message="Module is missing a top-level docstring",
+                    suggestion="Add a module-level docstring describing this file's purpose",
+                    file=path,
+                    line=1,
+                    rule_id="DOC001",
+                    category="documentation",
                 )
-        except SyntaxError:
-            pass
+            )
 
     def _check_redundant_comments(
         self, findings: list[Finding], lines: list[str], path: str
@@ -128,51 +119,18 @@ class DocumentationAgent(BaseAgent):
                 )
 
     def _check_docstring_params(self, findings: list[Finding], source: str, path: str) -> None:
-        """Check for docstring parameter documentation accuracy.
-
-        findings: List to append undocumented param findings to.
-        source: Source code to scan.
-        path: File path for finding attribution.
-        """
-        try:
-            tree = ast.parse(source)
-            for node in ast.walk(tree):
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    if not node.body:
-                        continue
-                    first_stmt = node.body[0]
-                    has_docstring = (
-                        isinstance(first_stmt, ast.Expr)
-                        and isinstance(first_stmt.value, ast.Constant)
-                        and isinstance(first_stmt.value.value, str)
-                    )
-                    if not has_docstring:
-                        continue
-
-                    doc = first_stmt.value.value
-                    actual_params = {
-                        arg.arg for arg in node.args.args if arg.arg != "self" and arg.arg != "cls"
-                    }
-
-                    doc_params = set(re.findall(r"^\s*([\w_]+)\s*:", doc, re.MULTILINE))
-
-                    missing_from_doc = actual_params - doc_params
-                    if missing_from_doc and node.name != "__init__":
-                        for param in sorted(missing_from_doc):
-                            findings.append(
-                                self.finding(
-                                    severity=Severity.LOW,
-                                    message=f"Parameter '{param}' in '{node.name}()' undocumented",
-                                    suggestion=f"Add ':param {param}: ...' describing the param",
-                                    file=path,
-                                    line=node.lineno or 0,
-                                    rule_id="DOC005",
-                                    category="documentation",
-                                )
-                            )
-
-        except SyntaxError:
-            pass
+        for item in self.parser.find_undocumented_params(source):
+            findings.append(
+                self.finding(
+                    severity=Severity.LOW,
+                    message=f"Parameter '{item['param']}' in '{item['function']}()' undocumented",
+                    suggestion=f"Add ':param {item['param']}: ...' describing the param",
+                    file=path,
+                    line=item["line"],
+                    rule_id="DOC005",
+                    category="documentation",
+                )
+            )
 
     def _check_too_few_comments(self, findings: list[Finding], lines: list[str], path: str) -> None:
         comment_lines = 0

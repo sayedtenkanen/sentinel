@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
-import ast
 import re
 
 from ..core.base_agent import BaseAgent
 from ..core.types import FileContext, Finding, Severity
+from ..parsers import PythonParser
+from ..parsers.base import BaseParser
 from ..tools.git_tools import detect_language
 
 
 class BestPracticesAgent(BaseAgent):
-    def __init__(self, enabled: bool = True) -> None:
+    def __init__(self, enabled: bool = True, parser: BaseParser | None = None) -> None:
         super().__init__(name="best-practices", enabled=enabled)
+        self.parser = parser or PythonParser()
 
     def analyze(self, file: FileContext) -> list[Finding]:
         findings: list[Finding] = []
@@ -71,26 +73,33 @@ class BestPracticesAgent(BaseAgent):
                 )
 
     def _check_mutable_defaults(self, findings: list[Finding], source: str, path: str) -> None:
-        try:
-            tree = ast.parse(source)
-            for node in ast.walk(tree):
-                if isinstance(node, ast.FunctionDef):
-                    for default in node.args.defaults:
-                        if isinstance(default, (ast.List, ast.Dict, ast.Set)):
-                            _suggestion = "Set default to None; init list/dict/set in function body"
-                            findings.append(
-                                self.finding(
-                                    severity=Severity.HIGH,
-                                    message=f"Mutable default argument in '{node.name}'",
-                                    suggestion=_suggestion,
-                                    file=path,
-                                    line=default.lineno or 0,
-                                    rule_id="BP003",
-                                    category="correctness",
-                                )
-                            )
-        except SyntaxError:
-            pass
+        for item in self.parser.find_mutable_defaults(source):
+            _suggestion = "Set default to None; init list/dict/set in function body"
+            findings.append(
+                self.finding(
+                    severity=Severity.HIGH,
+                    message=f"Mutable default argument in '{item['name']}'",
+                    suggestion=_suggestion,
+                    file=path,
+                    line=item["line"],
+                    rule_id="BP003",
+                    category="correctness",
+                )
+            )
+
+    def _check_type_hints(self, findings: list[Finding], source: str, path: str) -> None:
+        for item in self.parser.find_missing_type_hints(source):
+            findings.append(
+                self.finding(
+                    severity=Severity.INFO,
+                    message=f"Function '{item['name']}' is missing type hints",
+                    suggestion="Add type hints for parameters and return value",
+                    file=path,
+                    line=item["line"],
+                    rule_id="BP005",
+                    category="maintainability",
+                )
+            )
 
     def _check_global_vars(self, findings: list[Finding], lines: list[str], path: str) -> None:
         for i, line in enumerate(lines, 1):
@@ -109,30 +118,6 @@ class BestPracticesAgent(BaseAgent):
                         category="design",
                     )
                 )
-
-    def _check_type_hints(self, findings: list[Finding], source: str, path: str) -> None:
-        try:
-            tree = ast.parse(source)
-            for node in ast.walk(tree):
-                if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
-                    returns_hint = node.returns is not None
-                    params_hint = all(
-                        arg.annotation is not None or arg.arg == "self" for arg in node.args.args
-                    )
-                    if not returns_hint or not params_hint:
-                        findings.append(
-                            self.finding(
-                                severity=Severity.INFO,
-                                message=f"Function '{node.name}' is missing type hints",
-                                suggestion="Add type hints for parameters and return value",
-                                file=path,
-                                line=node.lineno or 0,
-                                rule_id="BP005",
-                                category="maintainability",
-                            )
-                        )
-        except SyntaxError:
-            pass
 
     def _check_meaningless_variables(
         self, findings: list[Finding], lines: list[str], path: str

@@ -6,30 +6,11 @@ computes fan-in/fan-out metrics, and identifies god modules.
 
 from __future__ import annotations
 
-import ast
 from collections import defaultdict
 
+from ..parsers.python import PythonParser
 
-def parse_imports(source: str) -> list[str]:
-    """Extract module-level import names from source code.
-
-    source: Python source code.
-    """
-    imports: list[str] = []
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return imports
-
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                imports.append(alias.name.split(".")[0])
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            base = node.module.split(".")[0]
-            if base not in imports:
-                imports.append(base)
-    return sorted(set(imports))
+_PARSER = PythonParser()
 
 
 class ImportGraph:
@@ -50,7 +31,7 @@ class ImportGraph:
         module = file_path.replace(".py", "").replace("/", ".")
         if module.endswith(".__init__"):
             module = module[:-9]
-        imports = parse_imports(source)
+        imports = _PARSER.parse_imports(source)
         self.add_module(module, imports)
 
     @property
