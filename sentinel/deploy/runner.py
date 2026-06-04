@@ -78,6 +78,7 @@ def create_parser() -> argparse.ArgumentParser:
             "best-practices",
             "documentation",
             "llm-review",
+            "execution",
         ],
         help="Disable a specific agent sub-agent",
     )
@@ -144,6 +145,18 @@ def create_parser() -> argparse.ArgumentParser:
         type=str,
         help="Directory for RAG knowledge base persistence",
     )
+    parser.add_argument(
+        "--sandbox-timeout",
+        type=int,
+        default=30,
+        help="Sandbox execution timeout in seconds (default: 30)",
+    )
+    parser.add_argument(
+        "--sandbox-retries",
+        type=int,
+        default=3,
+        help="Max sandbox code fix retries (default: 3)",
+    )
     return parser
 
 
@@ -173,30 +186,51 @@ def _setup_agents(cfg: dict, disabled: set[str], args: argparse.Namespace | None
     if args and not args.llm_api_key:
         args.llm_api_key = cfg.get("llm_api_key", "")
 
-    if args and args.llm_api_key and "llm-review" not in disabled:
-        from ..agents.llm_review import LlmReviewAgent
+    if args and args.llm_api_key:
+        if "llm-review" not in disabled:
+            from ..agents.llm_review import LlmReviewAgent
 
-        retriever = None
-        if args.rag_kb_dir:
-            from ..rag.knowledge_base import KnowledgeBase
-            from ..rag.retriever import Retriever
+            retriever = None
+            if args.rag_kb_dir:
+                from ..rag.knowledge_base import KnowledgeBase
+                from ..rag.retriever import Retriever
 
-            kb_path = Path(args.rag_kb_dir)
-            vector_store_path = kb_path / "vector_store.json"
-            kb_data_path = kb_path / "knowledge_base.json"
-            if vector_store_path.exists() and kb_data_path.exists():
-                kb = KnowledgeBase.load(kb_path)
-            else:
-                kb = KnowledgeBase()
-            retriever = Retriever(kb)
+                kb_path = Path(args.rag_kb_dir)
+                vector_store_path = kb_path / "vector_store.json"
+                kb_data_path = kb_path / "knowledge_base.json"
+                if vector_store_path.exists() and kb_data_path.exists():
+                    kb = KnowledgeBase.load(kb_path)
+                else:
+                    kb = KnowledgeBase()
+                retriever = Retriever(kb)
 
-        llm_agent = LlmReviewAgent(
-            api_key=args.llm_api_key,
-            model=args.llm_model or "gpt-4o-mini",
-            retriever=retriever,
-            rag_top_k=agent_config(cfg, "llm-review").get("rag_top_k", 3),
-        )
-        agents.append(llm_agent)  # type: ignore
+            llm_agent = LlmReviewAgent(
+                api_key=args.llm_api_key,
+                model=args.llm_model or "gpt-4o-mini",
+                retriever=retriever,
+                rag_top_k=agent_config(cfg, "llm-review").get("rag_top_k", 3),
+            )
+            agents.append(llm_agent)
+
+        if "execution" not in disabled:
+            from ..agents.execution_agent import ExecutionAgent
+            from ..tools.sandbox import Sandbox
+            from ..tools.tool_registry import default_registry
+
+            sandbox_timeout = getattr(args, "sandbox_timeout", 30)
+            sandbox_retries = getattr(args, "sandbox_retries", 3)
+            tool_registry = default_registry()
+            sandbox = Sandbox(timeout=sandbox_timeout)
+
+            exec_agent = ExecutionAgent(
+                api_key=args.llm_api_key,
+                model=args.llm_model or "gpt-4o-mini",
+                sandbox=sandbox,
+                tool_registry=tool_registry,
+                max_retries=sandbox_retries,
+                sandbox_timeout=sandbox_timeout,
+            )
+            agents.append(exec_agent)
 
     return agents
 

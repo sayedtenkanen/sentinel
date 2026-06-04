@@ -180,4 +180,34 @@ class AgentRegistry:
                 tags=["optional", "llm"],
             )
         )
+        registry.register(
+            AgentInfo(
+                name="execution",
+                description=(
+                    "Hybrid execution agent: direct tools + sandboxed Python code execution"
+                    " for cross-cutting analysis. Implements decision policy, iterative fix loop."
+                ),
+                version="1.0.0",
+                config_schema={
+                    "api_key": {"type": "string", "default": "", "description": "LLM API key"},
+                    "model": {
+                        "type": "string",
+                        "default": "gpt-4o-mini",
+                        "description": "Model name",
+                    },
+                    "max_retries": {
+                        "type": "int",
+                        "default": 3,
+                        "description": "Max code fix retries",
+                    },
+                    "sandbox_timeout": {
+                        "type": "int",
+                        "default": 30,
+                        "description": "Sandbox execution timeout in seconds",
+                    },
+                },
+                capabilities=["hybrid-execution", "sandboxed-code", "llm", "tool-routing"],
+                tags=["optional", "llm", "hybrid"],
+            )
+        )
         return registry

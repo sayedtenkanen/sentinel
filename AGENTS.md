@@ -15,6 +15,7 @@ sentinel/
 │   ├── style.py            # Import order, naming conventions, docstrings, magic numbers
 │   ├── best_practices.py   # Bare excepts, mutable defaults, globals, type hints, context mgrs
 │   ├── documentation.py    # Module/function/class docstrings, comment coverage
+│   ├── execution_agent.py  # Hybrid tool + sandboxed code execution agent (decision policy, iterative fix)
 │   ├── llm_review.py       # Optional LLM-powered review with RAG context retrieval
 │   └── summary.py          # Compiles final verdict, severity breakdown, cost summary
 ├── rag/
@@ -25,7 +26,9 @@ sentinel/
 │   ├── ast_tools.py        # AST-based complexity, function length, unused import detection
 │   ├── config.py           # .code-review.json loader with filter/suppress/matches helpers
 │   ├── git_tools.py        # Diff parsing, language detection
-│   └── secrets_scanner.py  # Standalone secrets scanner (20+ patterns)
+│   ├── sandbox.py          # Secure Python execution sandbox (restricted exec, timeout, import allow-list)
+│   ├── secrets_scanner.py  # Standalone secrets scanner (20+ patterns)
+│   └── tool_registry.py    # Discoverable direct tools for the hybrid execution agent
 ├── reporting/
 │   └── report.py           # Markdown and JSON report generators
 ├── monitor/
@@ -49,7 +52,7 @@ sentinel/
 
 | ADLC Phase | Implementation | Status |
 |---|---|---|
-| **Build** | 7 sub-agents (static-analysis, security, style, best-practices, documentation, llm-review, summary) + RAG (TF-IDF vector store, knowledge base, retriever) + orchestrator + tools | ✅ Complete (RAG added) |
+| **Build** | 8 sub-agents (static-analysis, security, style, best-practices, documentation, execution-agent, llm-review, summary) + RAG (TF-IDF vector store, knowledge base, retriever) + orchestrator + tools + sandbox + tool registry | ✅ Complete (execution agent added) |
 | **Test** | `test/evals.py` (2 fixtures, 100% score), `test/simulations.py` (3 scenarios, 6/6 steps), 371 unit tests | ✅ Complete (RAG tests added) |
 | **Deploy** | `deploy/runner.py` CLI with `--format`, `--output`, `--disable-agent`, `--trace-dir`, `--config`, `--cost-cap`, `--feedback`, `--workers`, `--llm-api-key`, `--llm-model`, `--rag-kb-dir`; `govern/context_hub.py` for versioned profiles | ✅ Complete (LLM + RAG flags added) |
 | **Monitor** | `monitor/tracer.py` captures trace events + metrics + feedbacks; `monitor/dashboard.py` HTML/JSON dashboard with `/api/feedback` POST endpoint | ✅ Complete (feedback pipeline added) |
@@ -90,6 +93,12 @@ python -m sentinel.deploy.runner path/to/file.py --llm-api-key sk-... --llm-mode
 
 # Persist and reuse RAG knowledge base
 python -m sentinel.deploy.runner path/to/dir/ --llm-api-key sk-... --rag-kb-dir ./kb
+
+# Custom sandbox timeout and retry limits
+python -m sentinel.deploy.runner path/to/file.py --llm-api-key sk-... --sandbox-timeout 60 --sandbox-retries 5
+
+# Disable execution agent but keep LLM review
+python -m sentinel.deploy.runner path/to/file.py --llm-api-key sk-... --disable-agent execution
 
 # Dashboard
 python -m sentinel.monitor.dashboard --port 8080 --trace-dir ./traces
@@ -137,6 +146,18 @@ SKIP=lint,format,ty,secrets,coverage git commit -m "skip all hooks"
 
 Expected: 100% on both good_code and bad_code fixtures, **371 tests passing**, 3/3 simulation scenarios passing, 85%+ coverage, zero ruff/ty errors.
 
+## Hybrid Execution Agent
+
+The execution agent (`sentinel/agents/execution_agent.py`) implements the **production hybrid agent pattern:**
+
+1. **Decision policy** — routes between direct tools (simple lookups) and sandboxed Python code (multi-step/compositional)
+2. **Sandboxed execution** — LLM generates Python code that uses injected tool functions, runs in restricted `Sandbox`
+3. **Iterative fix loop** — on sandbox error, feeds traceback back to LLM, rewrites and re-executes (capped at `max_retries`)
+4. **Direct tools** — exposed via `ToolRegistry` wrapping `sentinel/tools/` functions with auto-detected signatures
+5. **Safety** — sandbox blocks `os`, `sys`, `subprocess`, `socket`, `ctypes`, `open`, `eval`, `exec`, `compile`; only allow-listed stdlib modules permitted
+
+Key design: the execution agent complements (does not replace) the 5 deterministic static agents. It handles cross-cutting analysis that requires dynamic code, custom filtering, or tool composition.
+
 ## ADLC Gaps (All Resolved)
 
 | Gap | Resolution |
@@ -148,6 +169,9 @@ Expected: 100% on both good_code and bad_code fixtures, **371 tests passing**, 3
 | **Agent Registry** (Govern) | `sentinel/govern/registry.py` — `AgentRegistry.default()` with 7 agents, config schemas, tag/capability search |
 | **RAG Knowledge Base** (Build) | `sentinel/rag/vector_store.py` (TF-IDF), `knowledge_base.py` (chunking + persistence), `retriever.py` (similarity search) |
 | **LLM Review Agent** (Build) | `sentinel/agents/llm_review.py` — optional OpenAI-compatible agent with RAG context, wired via `--llm-api-key` |
+| **Hybrid Execution Agent** (Build) | `sentinel/agents/execution_agent.py` — hybrid tool + sandboxed code execution with decision policy and iterative fix loop |
+| **Secure Sandbox** (Build) | `sentinel/tools/sandbox.py` — restricted Python exec with import allow-list, timeout, stdout capture |
+| **Tool Registry** (Build) | `sentinel/tools/tool_registry.py` — discoverable direct tools wrapping `sentinel/tools/` functions |
 
 ## Key Design Decisions
 
