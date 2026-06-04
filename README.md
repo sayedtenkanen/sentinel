@@ -141,7 +141,7 @@ python -m sentinel.test.simulations
 ## Agents
 
 | Agent | Rules | Checks |
-|---|---|---|---|
+|---|---|---|
 | **static-analysis** | 9 | Cyclomatic complexity, line length, nesting depth, unused imports, trailing whitespace |
 | **security** | 32 + secret scanner | eval/exec, pickle, SQLi, XSS, SSTI, hardcoded creds, JWT, AWS keys, weak crypto, XXE, and more |
 | **style** | 6 | Import ordering, naming conventions (CapWords/snake_case), docstrings, magic numbers, is-vs-== |
@@ -161,7 +161,7 @@ The project is organized around the five phases of the [Agent Development Lifecy
 Agent source code, tools, and orchestration framework.
 
 | Module | Files | Purpose |
-|---|---|---|---|
+|---|---|---|
 | `sentinel/agents/` | `static_analysis.py`, `security.py`, `style.py`, `best_practices.py`, `documentation.py`, `architecture.py`, `refactor.py`, `summary.py`, `llm_review.py` | 9 sub-agents — each has a self-contained `analyze()` method returning `list[Finding]`. `architecture` and `refactor` run automatically; `llm-review` is optional (requires `--llm-api-key`) |
 | `sentinel/core/` | `orchestrator.py`, `base_agent.py`, `context.py`, `types.py` | Orchestrator coordinates agents via two-level parallelism (file-level + agent-level), `BaseAgent` abstract class with `run()` lifecycle, `FileContext`/`ReviewReport`/`Finding` data models |
 | `sentinel/tools/` | `ast_tools.py`, `import_graph.py`, `config.py`, `git_tools.py`, `secrets_scanner.py` | AST complexity analysis, import dependency graph builder, `.code-review.json` config loader, diff parsing, standalone secrets scanner (20+ patterns) |
@@ -181,7 +181,7 @@ python -m sentinel.deploy.runner path/to/file.py --llm-api-key sk-... --rag-kb-d
 Regression datasets, eval suite, simulation engine, and unit tests.
 
 | Component | Files | Purpose |
-|---|---|---|---|
+|---|---|---|
 | **Eval datasets** | `sentinel/test/fixtures/good_code.py`, `bad_code.py` | Known-good (4 findings) and known-bad (89 findings) fixtures for regression testing |
 | **Eval runner** | `sentinel/test/evals.py` | Scores 100% when both datasets match expected finding counts |
 | **Simulation engine** | `sentinel/test/simulations.py` | 3 multi-turn scenarios (bad→good, no-regression, severity improves), 6/6 steps |
