@@ -49,7 +49,7 @@ python -m sentinel.test.simulations
 ```mermaid
 flowchart TD
     CLI["CLI / User"] -->|paths, flags| RUN["runner.py\nload_config"]
-    RUN -->|FileContext[]| ORCH
+    RUN -->|"FileContext[]"| ORCH
 
     subgraph ORCH["Orchestrator"]
         CT["CostTracker\n(per-agent)"]
