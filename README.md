@@ -1,8 +1,8 @@
 # Sentinel
 
-**Autonomous Python code review bot** — 10 agents analyzing `.py` files for security, style, complexity, architecture, and risk.
+**Autonomous code review bot** — 10 agents analyzing `.py` and `.js` files for security, style, complexity, architecture, and risk. Multi-language via pluggable parser abstraction.
 
-**Python only.** Only `.py` files are discovered and analyzed. Other languages are ignored.
+**Python + JavaScript.** `.py` and `.js` files are discovered and analyzed. Add more languages by implementing `BaseParser` and registering it in `ParserRegistry`. Other languages return empty results via `NullParser`.
 
 Zero external dependencies. Pure Python stdlib.
 
@@ -123,9 +123,10 @@ Agent source code, tools, and orchestration framework.
 
 | Module | Files | Purpose |
 |---|---|---|
-| `sentinel/agents/` | `static_analysis.py`, `security.py`, `style.py`, `best_practices.py`, `documentation.py`, `architecture.py`, `refactor.py`, `summary.py`, `llm_review.py` | 9 sub-agents — each has a self-contained `analyze()` method returning `list[Finding]`. `architecture` and `refactor` run automatically; `llm-review` is optional (requires `--llm-api-key`) |
+| `sentinel/agents/` | `static_analysis.py`, `security.py`, `style.py`, `best_practices.py`, `documentation.py`, `architecture.py`, `refactor.py`, `summary.py`, `llm_review.py`, `execution_agent.py` | 10 sub-agents — each has a self-contained `analyze()` method returning `list[Finding]`. Language-agnostic via injected `BaseParser`. `architecture` and `refactor` run automatically; `llm-review` + `execution` are optional |
 | `sentinel/core/` | `orchestrator.py`, `base_agent.py`, `context.py`, `types.py` | Orchestrator coordinates agents via two-level parallelism (file-level + agent-level), `BaseAgent` abstract class with `run()` lifecycle, `FileContext`/`ReviewReport`/`Finding` data models |
-| `sentinel/tools/` | `ast_tools.py`, `import_graph.py`, `config.py`, `git_tools.py`, `secrets_scanner.py` | AST complexity analysis, import dependency graph builder, `.code-review.json` config loader, diff parsing, standalone secrets scanner (20+ patterns) |
+| `sentinel/tools/` | `ast_tools.py`, `import_graph.py`, `config.py`, `git_tools.py`, `secrets_scanner.py`, `sandbox.py`, `tool_registry.py` | AST complexity analysis, import dependency graph builder, `.code-review.json` config loader, diff parsing + language detection (20+ extensions), standalone secrets scanner (20+ patterns), secure sandboxed execution, tool registry for hybrid agent |
+| `sentinel/parsers/` | `base.py`, `python.py`, `javascript.py`, `null.py`, `models.py` | Pluggable parser abstraction — `BaseParser` ABC (15 methods), `PythonParser` (full ast.*), `JavaScriptParser` (regex/line heuristics), `NullParser` (safe empty defaults), 11 typed dataclass models |
 | `sentinel/rag/` | `vector_store.py`, `knowledge_base.py`, `retriever.py` | TF-IDF vector store (pure Python), code chunking + knowledge base, similarity search + RAG prompt builder |
 | **Design** | | Zero external dependencies (pure stdlib). Agents are stateless and thread-safe. Parallelism via `ThreadPoolExecutor` with separate file and agent pools to avoid deadlock. RAG uses pure Python TF-IDF vector store with cosine similarity — no external vector DB needed. |
 
@@ -146,7 +147,7 @@ Regression datasets, eval suite, simulation engine, and unit tests.
 | **Eval datasets** | `sentinel/test/fixtures/good_code.py`, `bad_code.py` | Known-good (4 findings) and known-bad (89 findings) fixtures for regression testing |
 | **Eval runner** | `sentinel/test/evals.py` | Scores 100% when both datasets match expected finding counts |
 | **Simulation engine** | `sentinel/test/simulations.py` | 3 multi-turn scenarios (bad→good, no-regression, severity improves), 6/6 steps |
-| **Unit tests** | `tests/test_*.py` (25 files) | 570 tests covering all agents, tools, orchestrator, cost tracker, tracer, dashboard, context hub, registry, RAG, import graph, rule miner, architecture, refactor, risk summary |
+| **Unit tests** | `tests/test_*.py` (27 files) | 609 tests covering all agents, tools, orchestrator, cost tracker, tracer, dashboard, context hub, registry, RAG, import graph, rule miner, architecture, refactor, risk summary, JS parser, NullParser |
 
 ```bash
 python -m sentinel.test.evals
