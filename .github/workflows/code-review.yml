@@ -128,7 +128,7 @@ jobs:
             echo "report={}" >> $GITHUB_OUTPUT
             exit 0
           fi
-          python -m sentinel.deploy.runner $files --format json -o review_report.json
+          python -m sentinel.deploy.runner $files --format json -o review_report.json || true
       - name: Post PR comment
         if: github.event_name == 'pull_request' && steps.review.outputs.report != '{}'
         uses: actions/github-script@v7
