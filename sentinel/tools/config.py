@@ -71,11 +71,13 @@ def matches_exclude(filepath: str, patterns: list[str]) -> bool:
     return False
 
 
-def filter_files(files: list[tuple[str, str]], config: dict[str, Any]) -> list[tuple[str, str]]:
+def filter_files(
+    files: list[tuple[str, str, str]], config: dict[str, Any]
+) -> list[tuple[str, str, str]]:
     patterns = config.get("exclude", [])
     if not patterns:
         return files
-    return [(p, c) for p, c in files if not matches_exclude(p, patterns)]
+    return [(p, c, lang) for p, c, lang in files if not matches_exclude(p, patterns)]
 
 
 def agent_config(config: dict[str, Any], agent_name: str) -> dict[str, Any]:

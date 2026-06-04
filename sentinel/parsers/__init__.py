@@ -11,6 +11,7 @@ Usage:
 from __future__ import annotations
 
 from .base import BaseParser
+from .null import NullParser
 from .python import PythonParser
 
 
@@ -29,7 +30,7 @@ class ParserRegistry:
         return self._parsers.get(language)
 
     def get_or_default(self, language: str) -> BaseParser:
-        return self._parsers.get(language) or PythonParser()
+        return self._parsers.get(language) or NullParser()
 
     def languages(self) -> list[str]:
         return list(self._parsers.keys())
@@ -45,4 +46,4 @@ def default_registry() -> ParserRegistry:
     return _DEFAULT_REGISTRY
 
 
-__all__ = ["BaseParser", "ParserRegistry", "PythonParser", "default_registry"]
+__all__ = ["BaseParser", "NullParser", "ParserRegistry", "PythonParser", "default_registry"]

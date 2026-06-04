@@ -209,15 +209,15 @@ class TestConfig(unittest.TestCase):
         self.assertTrue(matches_exclude("/home/user/project/_assets/secrets.txt", ["_assets"]))
 
     def test_filter_files_empty_patterns(self):
-        files = [("a.py", ""), ("b.py", "")]
+        files = [("a.py", "", "python"), ("b.py", "", "python")]
         result = filter_files(files, {"exclude": []})
         self.assertEqual(len(result), 2)
 
     def test_filter_files_excludes(self):
-        files = [("a.py", ""), ("tests/test_a.py", ""), ("b.py", "")]
+        files = [("a.py", "", "python"), ("tests/test_a.py", "", ""), ("b.py", "", "python")]
         result = filter_files(files, {"exclude": ["tests/"]})
         self.assertEqual(len(result), 2)
-        paths = [p for p, _ in result]
+        paths = [p for p, _, _ in result]
         self.assertNotIn("tests/test_a.py", paths)
 
     def test_agent_config(self):

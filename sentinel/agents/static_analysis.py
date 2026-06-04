@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ..core.base_agent import BaseAgent
 from ..core.types import FileContext, Finding, Severity
-from ..parsers import PythonParser
+from ..parsers import NullParser, default_registry
 from ..parsers.base import BaseParser
 from ..tools.ast_tools import (
     compute_complexity,
@@ -31,7 +31,7 @@ class StaticAnalysisAgent(BaseAgent):
         self.max_line_length = max_line_length
         self.max_nesting_depth = max_nesting_depth
         self.max_params = max_params
-        self.parser = parser or PythonParser()
+        self.parser = parser or NullParser()
 
     def analyze(self, file: FileContext) -> list[Finding]:
         findings: list[Finding] = []
@@ -41,6 +41,9 @@ class StaticAnalysisAgent(BaseAgent):
 
         if lang != "python" or "agents/static_analysis.py" in file.path:
             return findings
+
+        if isinstance(self.parser, NullParser):
+            self.parser = default_registry().get_or_default(lang)
 
         self._check_line_length(findings, lines, file.path)
         self._check_complexity(findings, source, file.path)

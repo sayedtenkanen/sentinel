@@ -6,7 +6,7 @@ import re
 
 from ..core.base_agent import BaseAgent
 from ..core.types import FileContext, Finding, Severity
-from ..parsers import PythonParser
+from ..parsers import NullParser, default_registry
 from ..parsers.base import BaseParser
 from ..tools.git_tools import detect_language
 
@@ -14,7 +14,7 @@ from ..tools.git_tools import detect_language
 class BestPracticesAgent(BaseAgent):
     def __init__(self, enabled: bool = True, parser: BaseParser | None = None) -> None:
         super().__init__(name="best-practices", enabled=enabled)
-        self.parser = parser or PythonParser()
+        self.parser = parser or NullParser()
 
     def analyze(self, file: FileContext) -> list[Finding]:
         findings: list[Finding] = []
@@ -23,6 +23,8 @@ class BestPracticesAgent(BaseAgent):
         lines = source.split("\n")
 
         if lang == "python" and "agents/best_practices.py" not in file.path:
+            if isinstance(self.parser, NullParser):
+                self.parser = default_registry().get_or_default(lang)
             self._check_bare_excepts(findings, source, file.path)
             self._check_lambda_assignments(findings, lines, file.path)
             self._check_mutable_defaults(findings, source, file.path)

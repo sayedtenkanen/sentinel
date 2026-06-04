@@ -6,7 +6,7 @@ import re
 
 from ..core.base_agent import BaseAgent
 from ..core.types import FileContext, Finding, Severity
-from ..parsers import PythonParser
+from ..parsers import NullParser, default_registry
 from ..parsers.base import BaseParser
 from ..tools.git_tools import detect_language
 
@@ -46,7 +46,7 @@ STDLIB_MODULES = {
 class StyleAgent(BaseAgent):
     def __init__(self, enabled: bool = True, parser: BaseParser | None = None) -> None:
         super().__init__(name="style", enabled=enabled)
-        self.parser = parser or PythonParser()
+        self.parser = parser or NullParser()
 
     def analyze(self, file: FileContext) -> list[Finding]:
         findings: list[Finding] = []
@@ -55,6 +55,8 @@ class StyleAgent(BaseAgent):
         lines = source.split("\n")
 
         if lang == "python" and "agents/style.py" not in file.path:
+            if isinstance(self.parser, NullParser):
+                self.parser = default_registry().get_or_default(lang)
             self._check_import_order(findings, lines, file.path)
             self._check_naming_conventions(findings, lines, file.path)
             self._check_missing_docstrings(findings, source, file.path)

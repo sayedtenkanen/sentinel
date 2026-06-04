@@ -8,8 +8,10 @@ from __future__ import annotations
 
 from ..core.base_agent import BaseAgent
 from ..core.types import FileContext, Finding, Severity
+from ..parsers import default_registry
+from ..parsers.base import BaseParser
 from ..parsers.models import FunctionLength
-from ..tools.ast_tools import find_function_lengths
+from ..tools.git_tools import detect_language
 
 
 class RefactorAgent(BaseAgent):
@@ -23,12 +25,14 @@ class RefactorAgent(BaseAgent):
         length_weight: float = 1.0,
         param_weight: float = 1.5,
         refactor_threshold: float = 20.0,
+        parser: BaseParser | None = None,
     ) -> None:
         super().__init__(name=self.name, enabled=enabled)
         self.complexity_weight = complexity_weight
         self.length_weight = length_weight
         self.param_weight = param_weight
         self.refactor_threshold = refactor_threshold
+        self.parser = parser
 
     def analyze(self, file: FileContext) -> list[Finding]:
         findings: list[Finding] = []
@@ -36,7 +40,9 @@ class RefactorAgent(BaseAgent):
         if not source.strip():
             return findings
 
-        functions = find_function_lengths(source)
+        lang = file.language or detect_language(file.path)
+        parser = self.parser or default_registry().get_or_default(lang)
+        functions = parser.find_function_lengths(source)
 
         for func in functions:
             score = self._compute_refactor_score(func)

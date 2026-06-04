@@ -13,6 +13,7 @@ from ..govern.cost import CostTracker
 from ..monitor.tracer import Tracer
 from ..reporting.report import to_json, to_markdown
 from ..tools.config import agent_config, filter_files, load_config, suppress_findings
+from ..tools.git_tools import detect_language
 
 
 def read_file(path: str) -> str:
@@ -26,21 +27,23 @@ def read_file(path: str) -> str:
 
 def collect_files(
     paths: list[str], exclude_patterns: list[str] | None = None
-) -> list[tuple[str, str]]:
-    """Walk paths and return (filepath, content) pairs, filtering excludes.
+) -> list[tuple[str, str, str]]:
+    """Walk paths and return (filepath, content, language) triples, filtering excludes.
 
     paths: Files or directories to scan.
     exclude_patterns: Optional glob patterns to exclude.
     """
-    files: list[tuple[str, str]] = []
+    files: list[tuple[str, str, str]] = []
     for path in paths:
         p = Path(path)
         if p.is_file():
-            files.append((str(p), read_file(str(p))))
+            lang = detect_language(str(p))
+            files.append((str(p), read_file(str(p)), lang))
         elif p.is_dir():
             for f in sorted(p.rglob("*.py")):
                 if ".venv" not in f.parts and "__pycache__" not in f.parts:
-                    files.append((str(f), read_file(str(f))))
+                    lang = detect_language(str(f))
+                    files.append((str(f), read_file(str(f)), lang))
     if exclude_patterns:
         files = filter_files(files, {"exclude": exclude_patterns})
     return files
@@ -314,7 +317,9 @@ def main(argv: list[str] | None = None) -> int:
         print("Error: no files found to review", file=sys.stderr)
         return 1
 
-    file_contexts = [FileContext(path=path, content=content) for path, content in files]
+    file_contexts = [
+        FileContext(path=path, content=content, language=lang) for path, content, lang in files
+    ]
     context = ReviewContext(scope=ReviewScope.FULL_FILE, files=file_contexts)
 
     if args.verbose:

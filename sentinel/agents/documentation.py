@@ -6,7 +6,7 @@ import re
 
 from ..core.base_agent import BaseAgent
 from ..core.types import FileContext, Finding, Severity
-from ..parsers import PythonParser
+from ..parsers import NullParser, default_registry
 from ..parsers.base import BaseParser
 from ..tools.git_tools import detect_language
 
@@ -14,7 +14,7 @@ from ..tools.git_tools import detect_language
 class DocumentationAgent(BaseAgent):
     def __init__(self, enabled: bool = True, parser: BaseParser | None = None) -> None:
         super().__init__(name="documentation", enabled=enabled)
-        self.parser = parser or PythonParser()
+        self.parser = parser or NullParser()
         self.redundant_comment_patterns = [
             (r"#\s*(increment|decrement)\s+\w+", "Descriptive comment on simple mutation"),
             (r"#\s*(set|get)\s+", "Trivial getter/setter comment"),
@@ -30,6 +30,8 @@ class DocumentationAgent(BaseAgent):
         lines = source.split("\n")
 
         if lang == "python":
+            if isinstance(self.parser, NullParser):
+                self.parser = default_registry().get_or_default(lang)
             self._check_module_docstring(findings, source, file.path)
             self._check_redundant_comments(findings, lines, file.path)
             self._check_stale_comments(findings, lines, file.path)
