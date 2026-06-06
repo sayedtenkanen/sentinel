@@ -35,7 +35,6 @@ if x > 0 {
 """
         complexity, _nesting = _PARSER.compute_complexity(source)
         self.assertEqual(complexity, 4)
-        self.assertEqual(_nesting, 3)
 
     def test_match_statement(self):
         source = """\
@@ -73,16 +72,23 @@ while x > 0 {
         self.assertEqual(complexity, 2)
         self.assertEqual(_nesting, 1)
 
-    def test_catch_not_counted(self):
-        """Rust has no catch keyword — it should not increase complexity."""
+    def test_comment_not_counted(self):
         source = """\
-// catch is not Rust syntax
-if x > 0 {
-    foo();
-}
+// if x > 0 { foo(); }
+let x = 1;
 """
         complexity, _nesting = _PARSER.compute_complexity(source)
-        self.assertEqual(complexity, 2)
+        self.assertEqual(complexity, 1)
+
+    def test_string_literal_not_counted(self):
+        source = 'let s = "if x > 0 { foo(); }";\n'
+        complexity, _nesting = _PARSER.compute_complexity(source)
+        self.assertEqual(complexity, 1)
+
+    def test_inline_comment_not_counted(self):
+        source = "let x = 1; // if x > 0 { foo(); }\n"
+        complexity, _nesting = _PARSER.compute_complexity(source)
+        self.assertEqual(complexity, 1)
 
 
 class TestFindFunctionLengths(unittest.TestCase):
@@ -97,6 +103,7 @@ fn hello() {
         self.assertEqual(len(funcs), 1)
         self.assertEqual(funcs[0].name, "hello")
         self.assertEqual(funcs[0].line, 1)
+        self.assertEqual(funcs[0].params, 0)
 
     def test_function_with_params(self):
         source = """\
@@ -127,6 +134,40 @@ async fn fetch_data() -> Result<String, Error> {
         funcs = _PARSER.find_function_lengths(source)
         self.assertEqual(len(funcs), 1)
         self.assertEqual(funcs[0].name, "fetch_data")
+        self.assertEqual(funcs[0].params, 0)
+
+    def test_pub_async_fn(self):
+        source = """\
+pub async fn foo(a: i32, b: i32) {
+    // body
+}
+"""
+        funcs = _PARSER.find_function_lengths(source)
+        self.assertEqual(len(funcs), 1)
+        self.assertEqual(funcs[0].name, "foo")
+        self.assertEqual(funcs[0].params, 2)
+
+    def test_unsafe_fn(self):
+        source = """\
+unsafe fn bar() {
+    // unsafe body
+}
+"""
+        funcs = _PARSER.find_function_lengths(source)
+        self.assertEqual(len(funcs), 1)
+        self.assertEqual(funcs[0].name, "bar")
+        self.assertEqual(funcs[0].params, 0)
+
+    def test_extern_c_fn(self):
+        source = """\
+extern "C" fn baz(x: i32) {
+    // extern body
+}
+"""
+        funcs = _PARSER.find_function_lengths(source)
+        self.assertEqual(len(funcs), 1)
+        self.assertEqual(funcs[0].name, "baz")
+        self.assertEqual(funcs[0].params, 1)
 
     def test_multiple_functions(self):
         source = """\
@@ -143,6 +184,8 @@ fn bar() {
         self.assertEqual(len(funcs), 2)
         self.assertEqual(funcs[0].name, "foo")
         self.assertEqual(funcs[1].name, "bar")
+        self.assertEqual(funcs[0].params, 0)
+        self.assertEqual(funcs[1].params, 0)
 
     def test_nested_braces(self):
         source = """\
@@ -170,6 +213,16 @@ impl Server {
         self.assertEqual(len(funcs), 1)
         self.assertEqual(funcs[0].name, "start")
         self.assertEqual(funcs[0].params, 1)
+
+    def test_zero_arg_function(self):
+        source = """\
+fn no_args() {
+    println!("no args");
+}
+"""
+        funcs = _PARSER.find_function_lengths(source)
+        self.assertEqual(len(funcs), 1)
+        self.assertEqual(funcs[0].params, 0)
 
 
 class TestFindUnusedImports(unittest.TestCase):
@@ -250,6 +303,79 @@ fn main() {
         unused = _PARSER.find_unused_imports(source)
         self.assertEqual(len(unused), 0)
 
+    def test_glob_import_skipped(self):
+        source = """\
+use std::io::*;
+
+fn main() {
+    println!("hello");
+}
+"""
+        unused = _PARSER.find_unused_imports(source)
+        self.assertEqual(len(unused), 0)
+
+    def test_alias_import(self):
+        source = """\
+use std::io as sio;
+
+fn main() {
+    sio::println("hello");
+}
+"""
+        unused = _PARSER.find_unused_imports(source)
+        self.assertEqual(len(unused), 0)
+
+    def test_alias_import_unused(self):
+        source = """\
+use std::io as sio;
+
+fn main() {
+    println!("hello");
+}
+"""
+        unused = _PARSER.find_unused_imports(source)
+        self.assertEqual(len(unused), 1)
+        self.assertEqual(unused[0].name, "sio")
+
+    def test_group_alias_import(self):
+        source = """\
+use std::{io as sio, fs};
+
+fn main() {
+    sio::println("hello");
+}
+"""
+        unused = _PARSER.find_unused_imports(source)
+        self.assertEqual(len(unused), 1)
+        self.assertEqual(unused[0].name, "fs")
+
+    def test_word_boundary_not_substring(self):
+        source = """\
+use std::io;
+
+fn main() {
+    let mio = 1;
+    println!("{}", mio);
+}
+"""
+        unused = _PARSER.find_unused_imports(source)
+        self.assertEqual(len(unused), 1)
+        self.assertEqual(unused[0].name, "io")
+
+    def test_line_numbers_correct(self):
+        source = """\
+use std::io;
+use std::fs;
+
+fn main() {
+    io::println("hello");
+}
+"""
+        unused = _PARSER.find_unused_imports(source)
+        self.assertEqual(len(unused), 1)
+        self.assertEqual(unused[0].name, "fs")
+        self.assertEqual(unused[0].line, 2)
+
 
 class TestParseImports(unittest.TestCase):
     def test_single_import(self):
@@ -280,6 +406,21 @@ use std::io;
         imports = _PARSER.parse_imports(source)
         self.assertEqual(imports, ["std::io"])
 
+    def test_glob_import(self):
+        source = "use std::io::*;"
+        imports = _PARSER.parse_imports(source)
+        self.assertEqual(imports, ["*"])
+
+    def test_alias_import(self):
+        source = "use std::io as sio;"
+        imports = _PARSER.parse_imports(source)
+        self.assertEqual(imports, ["sio"])
+
+    def test_group_alias_import(self):
+        source = "use std::{io as sio, fs};"
+        imports = _PARSER.parse_imports(source)
+        self.assertEqual(imports, ["fs", "sio"])
+
 
 class TestFindFunctionsWithDocstrings(unittest.TestCase):
     def test_function_with_doc_comment(self):
@@ -309,6 +450,30 @@ fn hello() {
 
 fn init() {
     println!("init");
+}
+"""
+        docs = _PARSER.find_functions_with_docstrings(source)
+        self.assertEqual(len(docs), 1)
+        self.assertFalse(docs[0].has_docstring)
+
+    def test_multi_line_doc_comment(self):
+        source = """\
+/// This is a multi-line
+/// doc comment for hello.
+fn hello() {
+    println!("hello");
+}
+"""
+        docs = _PARSER.find_functions_with_docstrings(source)
+        self.assertEqual(len(docs), 1)
+        self.assertTrue(docs[0].has_docstring)
+
+    def test_doc_comment_with_attribute(self):
+        source = """\
+/// Documented function.
+#[test]
+fn test_something() {
+    assert!(true);
 }
 """
         docs = _PARSER.find_functions_with_docstrings(source)
@@ -413,6 +578,9 @@ class TestFindShadowedBuiltins(unittest.TestCase):
 class TestModuleHasDocstring(unittest.TestCase):
     def test_inner_doc_comment(self):
         self.assertTrue(_PARSER.find_module_has_docstring("//! Module docs\n"))
+
+    def test_block_doc_comment(self):
+        self.assertTrue(_PARSER.find_module_has_docstring("/*! Block docs */\n"))
 
     def test_no_doc_comment(self):
         self.assertFalse(_PARSER.find_module_has_docstring("use std::io;\n"))

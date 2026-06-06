@@ -80,6 +80,43 @@ RUST_BUILTINS = {
 _RUST_FUNC_RE = re.compile(
     r"(?:pub\s+)?(?:async\s+)?(?:unsafe\s+)?(?:extern\s+\"[^\"]*\"\s+)?fn\s+(\w+)"
 )
+_RUST_STRING_RE = re.compile(r'"([^"\\]|\\.)*"')
+
+
+def _strip_line_comments(line: str) -> str:
+    """Remove inline // comments from a line, preserving strings."""
+    result = []
+    i = 0
+    in_string = False
+    while i < len(line):
+        if line[i] == '"' and (i == 0 or line[i - 1] != "\\"):
+            in_string = not in_string
+            result.append(line[i])
+        elif not in_string and line[i : i + 2] == "//":
+            break
+        else:
+            result.append(line[i])
+        i += 1
+    return "".join(result)
+
+
+def _count_params_in_sig(sig: str) -> int:
+    """Count parameters between the first ( and its matching )."""
+    paren_start = sig.find("(")
+    if paren_start == -1:
+        return 0
+    depth = 1
+    i = paren_start + 1
+    while i < len(sig) and depth > 0:
+        if sig[i] == "(":
+            depth += 1
+        elif sig[i] == ")":
+            depth -= 1
+        i += 1
+    param_str = sig[paren_start + 1 : i - 1].strip()
+    if not param_str:
+        return 0
+    return len(re.findall(r",", param_str)) + 1
 
 
 class RustParser(BaseParser):
@@ -91,9 +128,21 @@ class RustParser(BaseParser):
         max_nest = 0
         for line in source.split("\n"):
             stripped = line.strip()
-            open_braces = stripped.count("{") - stripped.count("}")
+            if (
+                not stripped
+                or stripped.startswith("//")
+                or stripped.startswith("/*")
+                or stripped.startswith("*")
+                or stripped.startswith("*/")
+            ):
+                continue
+            code_part = _strip_line_comments(stripped)
+            if not code_part:
+                continue
+            code_no_strings = _RUST_STRING_RE.sub('""', code_part)
+            open_braces = code_no_strings.count("{") - code_no_strings.count("}")
             if any(
-                kw in stripped
+                kw in code_no_strings
                 for kw in (
                     "if ",
                     "else if ",
@@ -104,10 +153,10 @@ class RustParser(BaseParser):
                 )
             ):
                 complexity += 1
-            if "&&" in stripped:
-                complexity += stripped.count("&&")
-            if "||" in stripped:
-                complexity += stripped.count("||")
+            if "&&" in code_no_strings:
+                complexity += code_no_strings.count("&&")
+            if "||" in code_no_strings:
+                complexity += code_no_strings.count("||")
             if open_braces > 0:
                 nest_depth += open_braces
                 max_nest = max(max_nest, nest_depth)
@@ -138,14 +187,7 @@ class RustParser(BaseParser):
                 1 for kw in ("if ", "for ", "while ", "loop ", "match ") if kw in body
             )
             sig = source[match.start() : bracket_start]
-            paren_start = sig.find("(")
-            if paren_start == -1:
-                param_count = 0
-            else:
-                sig_after_paren = sig[paren_start:]
-                param_count = len(re.findall(r",", sig_after_paren))
-                if sig_after_paren.startswith("("):
-                    param_count += 1
+            param_count = _count_params_in_sig(sig)
             results.append(
                 FunctionLength(
                     name=name,
@@ -166,6 +208,9 @@ class RustParser(BaseParser):
         for m in use_re.finditer(source):
             line_num = source[: m.start()].count("\n") + 1
             import_str = m.group(1).strip()
+            if "*" in import_str and "::" in import_str:
+                imports_end = max(imports_end, m.end())
+                continue
             if "{" in import_str:
                 brace_start = import_str.find("{")
                 brace_end = import_str.find("}")
@@ -173,18 +218,26 @@ class RustParser(BaseParser):
                     group_content = import_str[brace_start + 1 : brace_end]
                     items = [item.strip() for item in group_content.split(",")]
                     for item in items:
-                        name = item.split("::")[-1].strip()
+                        if item.strip() == "*":
+                            continue
+                        alias_match = re.match(r"(\w+(?:::\w+)*)\s+as\s+(\w+)", item)
+                        name = alias_match.group(2) if alias_match else item.split("::")[-1].strip()
                         if name and name not in ("self", "super", "crate"):
                             imports.append((name, line_num))
             else:
-                parts = import_str.split("::")
-                name = parts[-1]
+                alias_match = re.match(r"([\w:]+)\s+as\s+(\w+)", import_str)
+                if alias_match:
+                    name = alias_match.group(2)
+                else:
+                    parts = import_str.split("::")
+                    name = parts[-1]
                 if name not in ("self", "super", "crate"):
                     imports.append((name, line_num))
             imports_end = max(imports_end, m.end())
         body = source[imports_end:]
         for name, line_num in imports:
-            if name not in body:
+            pattern = rf"\b{re.escape(name)}\b"
+            if not re.search(pattern, body):
                 results.append(UnusedImport(name=name, line=line_num))
         return results
 
@@ -193,15 +246,30 @@ class RustParser(BaseParser):
         use_re = re.compile(r"use\s+([\w:{{}},\s*]+);")
         for m in use_re.finditer(source):
             import_str = m.group(1).strip()
+            if "*" in import_str and "::" in import_str:
+                imports.append("*")
+                continue
             if "{" in import_str:
                 brace_start = import_str.find("{")
                 brace_end = import_str.find("}")
                 if brace_start != -1 and brace_end != -1:
                     group_content = import_str[brace_start + 1 : brace_end]
                     items = [item.strip() for item in group_content.split(",")]
-                    imports.extend(items)
+                    for item in items:
+                        if item.strip() == "*":
+                            imports.append("*")
+                        else:
+                            alias_match = re.match(r"(\w+(?:::\w+)*)\s+as\s+(\w+)", item)
+                            if alias_match:
+                                imports.append(alias_match.group(2))
+                            else:
+                                imports.append(item)
             else:
-                imports.append(import_str)
+                alias_match = re.match(r"([\w:]+)\s+as\s+(\w+)", import_str)
+                if alias_match:
+                    imports.append(alias_match.group(2))
+                else:
+                    imports.append(import_str)
         return sorted(set(imports))
 
     def find_functions_with_docstrings(self, source: str) -> list[DocstringInfo]:
@@ -260,7 +328,7 @@ class RustParser(BaseParser):
 
     def find_module_has_docstring(self, source: str) -> bool:
         stripped = source.lstrip()
-        return stripped.startswith("//!")
+        return stripped.startswith("//!") or stripped.startswith("/*!")
 
     def find_undocumented_params(self, source: str) -> list[UndocumentedParam]:
         return []
