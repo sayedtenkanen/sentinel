@@ -146,6 +146,36 @@ Add new scenarios via `DEFAULT_SCENARIOS` in `simulations.py`.
 - Prefix with the agent or module name: `static-analysis:`, `security:`, `docs:`, `tests:`
 - Reference the rule ID when fixing a specific check
 
+## Branching & PR
+
+**Never push directly to `main`.** All changes must go through a pull request.
+
+```bash
+# 1. Create a feature branch
+git checkout -b feature/your-feature main
+
+# 2. Make changes, run checks
+python -m ruff check sentinel/ tests/
+python -m ruff format --check sentinel/ tests/
+python -m ty check sentinel/
+python -m coverage run -m unittest discover -s tests/ -q
+python -m sentinel.test.evals
+
+# 3. Commit with message
+git commit -m "feature/agent: description"
+
+# 4. Push and create PR
+git push -u origin feature/your-feature
+gh pr create --title "feat: description" --body "Summary of changes"
+```
+
+**Branch naming:** `feature/`, `fix/`, `docs/`, `refactor/` prefixes.
+
+**PR requirements:**
+- All CI checks pass (ruff, ty, tests, evals, coverage ≥ 85%)
+- At least one review before merge
+- Squash merge to keep main history clean
+
 ## Architecture Notes
 
 - **No external dependencies** — keep it pure stdlib. Zero install friction.
