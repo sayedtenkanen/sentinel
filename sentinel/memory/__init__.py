@@ -6,8 +6,8 @@ resolving, and synthesizing memories from code review sessions.
 Modules:
     graph: DAG executor with state threading and checkpointing
     metrics: Run, memory, and user quality metrics
-    store: SQLite-backed persistent memory storage
     models: Memory, MemoryCandidate, ReviewEvent, FeedbackEvent
+    store: SQLite-backed persistent memory storage
     retriever: Context-aware memory retrieval
     extractor: Pattern mining from feedback (extraction node)
     validator: Verify patterns against codebase (validation node)
@@ -24,14 +24,28 @@ from sentinel.memory.metrics import (
     RunMetrics,
     UserMetrics,
 )
+from sentinel.memory.models import (
+    FeedbackEvent,
+    Memory,
+    MemoryCandidate,
+    MemoryType,
+    ReviewEvent,
+)
+from sentinel.memory.store import MemoryStore
 
 __all__ = [
     "Edge",
+    "FeedbackEvent",
     "Graph",
     "GraphState",
+    "Memory",
+    "MemoryCandidate",
     "MemoryMetrics",
+    "MemoryStore",
+    "MemoryType",
     "MetricsStore",
     "Node",
+    "ReviewEvent",
     "RunMetrics",
     "UserMetrics",
     "linear_graph",
