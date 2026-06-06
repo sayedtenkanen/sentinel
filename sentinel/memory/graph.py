@@ -249,10 +249,13 @@ class Graph:
                 break
 
             # Check edge conditions for early termination
+            should_stop = False
             for edge in self.edges:
                 if edge.source == node_name and not edge.should_traverse(current_state):
-                    # Skip to next unvisited node
+                    should_stop = True
                     break
+            if should_stop:
+                break
 
         return current_state
 

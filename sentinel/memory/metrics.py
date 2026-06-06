@@ -187,9 +187,11 @@ class MetricsStore:
 
     def store_user(self, metrics: UserMetrics) -> None:
         """Store user metrics."""
+        import json
+
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                """INSERT OR REPLACE INTO user_metrics VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT OR REPLACE INTO user_metrics VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     metrics.run_id,
                     metrics.timestamp,
@@ -200,6 +202,7 @@ class MetricsStore:
                     metrics.correct_feedback,
                     metrics.total_suppressions,
                     metrics.true_suppressions,
+                    json.dumps(metrics.metadata),
                 ),
             )
 

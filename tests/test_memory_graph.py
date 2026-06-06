@@ -4,7 +4,7 @@ import os
 import tempfile
 import unittest
 
-from sentinel.memory.graph import Graph, GraphState, Node, linear_graph
+from sentinel.memory.graph import Edge, Graph, GraphState, Node, linear_graph
 
 
 class TestGraphState(unittest.TestCase):
@@ -181,6 +181,31 @@ class TestVisualize(unittest.TestCase):
         self.assertIn("a -> b", viz)
         self.assertIn("b -> c", viz)
         self.assertIn("[END]", viz)
+
+    def test_conditional_node_viz(self):
+        graph = Graph(
+            nodes=[
+                Node(name="a", fn=lambda s: s),
+                Node(name="b", fn=lambda s: s, condition=lambda _: True),
+                Node(name="c", fn=lambda s: s),
+            ],
+            edges=[("a", "b"), ("b", "c")],
+        )
+        viz = graph.visualize()
+        self.assertIn("[conditional]", viz)
+        self.assertIn("a -> b", viz)
+        self.assertIn("b [conditional] -> c", viz)
+
+    def test_conditional_edge_viz(self):
+        graph = Graph(
+            nodes=[
+                Node(name="a", fn=lambda s: s),
+                Node(name="b", fn=lambda s: s),
+            ],
+        )
+        graph.add_edge(Edge(source="a", target="b", condition=lambda _: True))
+        viz = graph.visualize()
+        self.assertIn("--?-->", viz)
 
     def test_repr(self):
         graph = linear_graph("a", "b")
