@@ -72,6 +72,9 @@ GO_BUILTINS = {
     "false",
 }
 
+_GO_FUNC_RE = re.compile(r"func\s+(?:\(\s*\w+\s+\*?\w+\s*\)\s+)?(\w+)\s*\(")
+_GO_FUNC_WITH_PARAMS_RE = re.compile(r"func\s+(?:\(\s*\w+\s+\*?\w+\s*\)\s+)?(\w+)\s*\(([^)]*)\)")
+
 
 class GoParser(BaseParser):
     """Parser for Go using regex/line heuristics."""
@@ -92,7 +95,6 @@ class GoParser(BaseParser):
                     "switch ",
                     "select ",
                     "case ",
-                    "catch ",
                 )
             ):
                 complexity += 1
@@ -109,8 +111,7 @@ class GoParser(BaseParser):
 
     def find_function_lengths(self, source: str) -> list[FunctionLength]:
         results: list[FunctionLength] = []
-        func_re = re.compile(r"func\s+(?:\(\s*\w+\s+\*?\w+\s*\)\s+)?(\w+)\s*\(")
-        for match in func_re.finditer(source):
+        for match in _GO_FUNC_RE.finditer(source):
             name = match.group(1)
             start_line = source[: match.start()].count("\n") + 1
             bracket_start = source.find("{", match.start())
@@ -130,10 +131,7 @@ class GoParser(BaseParser):
             body_complexity = sum(
                 1 for kw in ("if ", "for ", "switch ", "select ", "case ") if kw in body
             )
-            param_str = source[match.start() : bracket_start]
-            param_count = len(re.findall(r",", param_str))
-            if "(" in param_str:
-                param_count += 1
+            param_count = self._count_params(source, match.start(), bracket_start)
             results.append(
                 FunctionLength(
                     name=name,
@@ -146,38 +144,50 @@ class GoParser(BaseParser):
             )
         return results
 
+    def _count_params(self, source: str, match_start: int, bracket_start: int) -> int:
+        """Count parameters by isolating the param list from the signature."""
+        sig = source[match_start:bracket_start]
+        paren_start = sig.find("(")
+        if paren_start == -1:
+            return 0
+        sig_after_paren = sig[paren_start:]
+        param_count = len(re.findall(r",", sig_after_paren))
+        if sig_after_paren.startswith("("):
+            param_count += 1
+        return param_count
+
     def find_unused_imports(self, source: str) -> list[UnusedImport]:
         results: list[UnusedImport] = []
         imports: list[tuple[str, int]] = []
+        imports_end = 0
         group_re = re.compile(r"import\s*\(")
-        single_re = re.compile(r"import\s+\"(\w+)\"")
+        single_re = re.compile(r'import\s+"([^"]+)"')
         for m in group_re.finditer(source):
             block_start = m.end()
             block_end = source.find(")", block_start)
             if block_end == -1:
                 continue
             block = source[block_start:block_end]
-            for line in block.split("\n"):
-                line = line.strip()
-                if not line or line.startswith("//"):
+            for line_offset, line in enumerate(block.split("\n")):
+                stripped = line.strip()
+                if not stripped or stripped.startswith("//"):
                     continue
-                pkg_match = re.search(r'"(\w+)"', line)
+                pkg_match = re.search(r'"([^"]+)"', stripped)
                 if pkg_match:
                     pkg = pkg_match.group(1)
-                    line_num = (
-                        source[:block_start].count("\n") + block[: block.find(pkg)].count("\n") + 1
-                    )
+                    line_num = source[:block_start].count("\n") + line_offset + 1
                     imports.append((pkg, line_num))
+            imports_end = max(imports_end, block_end)
         for m in single_re.finditer(source):
             pkg = m.group(1)
             line_num = source[: m.start()].count("\n") + 1
             imports.append((pkg, line_num))
-        body_start = source.find("func ")
-        if body_start == -1:
-            body_start = 0
+            imports_end = max(imports_end, m.end())
+        body_start = imports_end
         body = source[body_start:]
         for pkg, line_num in imports:
-            if pkg not in body:
+            pkg_name = pkg.rsplit("/", 1)[-1]
+            if pkg_name not in body:
                 results.append(UnusedImport(name=pkg, line=line_num))
         return results
 
@@ -200,9 +210,8 @@ class GoParser(BaseParser):
     def find_functions_with_docstrings(self, source: str) -> list[DocstringInfo]:
         results: list[DocstringInfo] = []
         lines = source.split("\n")
-        func_re = re.compile(r"func\s+(?:\(\s*\w+\s+\*?\w+\s*\)\s+)?(\w+)\s*\(")
         for i, line in enumerate(lines):
-            match = func_re.search(line)
+            match = _GO_FUNC_RE.search(line)
             if not match:
                 continue
             name = match.group(1)
@@ -232,8 +241,7 @@ class GoParser(BaseParser):
 
     def find_too_many_params(self, source: str, max_params: int) -> list[ParamOverflow]:
         results: list[ParamOverflow] = []
-        func_re = re.compile(r"func\s+(?:\(\s*\w+\s+\*?\w+\s*\)\s+)?(\w+)\s*\(([^)]*)\)")
-        for match in func_re.finditer(source):
+        for match in _GO_FUNC_WITH_PARAMS_RE.finditer(source):
             name = match.group(1)
             params_str = match.group(2).strip()
             if not params_str:
@@ -265,21 +273,10 @@ class GoParser(BaseParser):
         lines = source.split("\n")
         for i, line in enumerate(lines, 1):
             stripped = line.strip()
-            func_match = re.match(r"func\s+(?:\(\s*\w+\s+\*?\w+\s*\)\s+)?(\w+)\s*\(", stripped)
+            func_match = _GO_FUNC_RE.match(stripped)
             if func_match:
                 name = func_match.group(1)
-                if (
-                    name[0].isupper()
-                    and not re.match(r"^[A-Z][a-zA-Z0-9]+$", name)
-                    and name
-                    not in (
-                        "Main",
-                        "Init",
-                        "Test",
-                        "Benchmark",
-                        "Example",
-                    )
-                ):
+                if name[0].isupper() and not self._is_valid_exported_name(name):
                     results.append(NamingViolation(name=name, line=i, kind="function"))
             type_match = re.match(r"type\s+(\w+)\s+struct", stripped)
             if type_match:
@@ -287,6 +284,21 @@ class GoParser(BaseParser):
                 if not re.match(r"^[A-Z][a-zA-Z0-9]+$", name):
                     results.append(NamingViolation(name=name, line=i, kind="type"))
         return results
+
+    def _is_valid_exported_name(self, name: str) -> bool:
+        """Check if an exported name follows Go conventions.
+
+        Go exported names start with an uppercase letter. Special names
+        like Test*, Benchmark*, and Example* use prefix-based rules.
+        """
+        if re.match(r"^[A-Z][a-zA-Z0-9]+$", name):
+            return True
+        for prefix in ("Test", "Benchmark", "Example"):
+            if name.startswith(prefix) and len(name) > len(prefix):
+                rest = name[len(prefix) :]
+                if rest[0].isupper():
+                    return True
+        return name in ("Main", "Init")
 
     def find_shadowed_builtins(
         self, source: str, builtins: set[str] | None = None
