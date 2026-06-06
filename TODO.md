@@ -57,6 +57,16 @@
 ## Sentinel Memory — Dreaming-Style Memory System
 
 > Evaluation before features. Build measurement first.
+> LangGraph-style patterns (graphs, state) without the dependency.
+
+### Tech Stack
+
+| Concern | Choice | Rationale |
+|---|---|---|
+| **Orchestration** | Custom `Graph` executor | LangGraph-style patterns, zero deps |
+| **Database** | SQLite (stdlib) | Queryable, temporal queries, single file |
+| **Observation** | Extend `Tracer` + `Dashboard` | Already works, just add memory views |
+| **Queueing** | `threading.Timer` | Simple periodic consolidation |
 
 ### Architecture
 
@@ -76,6 +86,53 @@ Stage 5: Synthesis → Memory Store
 Stage 6: Retrieval → Agent Context
     ↓
     (loop back to Stage 0 for measurement)
+```
+
+### Graph Abstraction (LangGraph-Style)
+
+```python
+@dataclass
+class GraphState:
+    """Typed state flowing through the graph."""
+    review_events: list[ReviewEvent]
+    feedback_events: list[FeedbackEvent]
+    candidates: list[MemoryCandidate]
+    validated: list[ValidatedMemory]
+    conflicts: list[tuple[Memory, Memory]]
+    resolved: list[Memory]
+    synthesized: list[Memory]
+    memories_to_store: list[Memory]
+    context_for_agents: dict
+    metrics: RunMetrics | None
+
+class Node:
+    """Processing step — pure function: GraphState → GraphState."""
+    name: str
+    fn: Callable[[GraphState], GraphState]
+    condition: Callable[[GraphState], bool] | None  # skip if False
+
+class Graph:
+    """Lightweight DAG executor with checkpointing."""
+    nodes: list[Node]
+    edges: list[tuple[str, str]]
+    
+    def run(self, state: GraphState) -> GraphState: ...
+    def checkpoint(self, state: GraphState, path: str): ...
+    def restore(self, path: str) -> GraphState: ...
+```
+
+### Memory Graph
+
+```
+ExtractMemories (node)
+    ↓
+ValidateMemories (node)
+    ↓
+ConflictResolution (node)
+    ↓
+SynthesizeMemories (node)
+    ↓
+StoreMemories (node)
 ```
 
 ### Stage 0: Evaluation Framework
@@ -112,7 +169,7 @@ class UserMetrics:
     suppression_quality: float
 ```
 
-**Storage:** JSON files under `--metrics-dir`
+**Storage:** SQLite under `--metrics-dir`
 
 **CLI:** `python -m sentinel.deploy.runner path/to/file.py --metrics-dir ./metrics`
 
@@ -203,7 +260,7 @@ class MemoryStore:
     def list_all(self) -> list[Memory]: ...
 ```
 
-**Storage:** JSON file `--memory-dir/memory.json`
+**Storage:** SQLite `--memory-dir/memory.db`
 
 ### Stage 6: Retrieval → Agent Context
 
@@ -232,22 +289,22 @@ Agent Prompt Injection (append to context)
 
 | Step | Phase | What | Deliverable |
 |---|---|---|---|
-| 1 | 0A | Metrics data models | `sentinel/memory/metrics.py` |
-| 2 | 0B | Wire metrics into Tracer | Update `sentinel/monitor/tracer.py` |
-| 3 | 0C | Baseline measurement | Run on fixtures, store baseline |
-| 4 | 0D | Metrics CLI | `--metrics-dir` flag on runner |
-| 5 | 1A | Memory store | `sentinel/memory/store.py` |
-| 6 | 1B | Memory data models | `sentinel/memory/models.py` |
-| 7 | 1C | Store CRUD | Unit tests for store |
-| 8 | 2A | Memory retriever | `sentinel/memory/retriever.py` |
-| 9 | 2B | Retriever integration | Wire into orchestrator |
-| 10 | 3A | Feedback extractor | `sentinel/memory/extractor.py` |
-| 11 | 3B | Context extractor | File observation logic |
-| 12 | 3C | Synthesizer | Combine memories into rules |
-| 13 | 4A | Validator | `sentinel/memory/validator.py` |
-| 14 | 4B | Conflict resolver | `sentinel/memory/conflict.py` |
-| 15 | 5A | Temporal logic | `sentinel/memory/temporal.py` |
-| 16 | 5B | Consolidation job | Background synthesis |
+| 1 | 0A | Graph abstraction | `sentinel/memory/graph.py` — Graph, Node, GraphState |
+| 2 | 0B | Metrics data models | `sentinel/memory/metrics.py` |
+| 3 | 0C | Wire metrics into Tracer | Update `sentinel/monitor/tracer.py` |
+| 4 | 0D | Baseline measurement | Run on fixtures, store baseline |
+| 5 | 0E | Metrics CLI | `--metrics-dir` flag on runner |
+| 6 | 1A | Memory store (SQLite) | `sentinel/memory/store.py` |
+| 7 | 1B | Memory data models | `sentinel/memory/models.py` |
+| 8 | 1C | Store CRUD + tests | Unit tests for store |
+| 9 | 2A | Memory retriever | `sentinel/memory/retriever.py` |
+| 10 | 2B | Retriever integration | Wire into orchestrator |
+| 11 | 3A | Extraction node | `sentinel/memory/extractor.py` |
+| 12 | 3B | Validation node | `sentinel/memory/validator.py` |
+| 13 | 3C | Conflict node | `sentinel/memory/conflict.py` |
+| 14 | 3D | Synthesis node | `sentinel/memory/synthesizer.py` |
+| 15 | 4A | Temporal logic | `sentinel/memory/temporal.py` |
+| 16 | 4B | Consolidation job | `threading.Timer` background synthesis |
 | 17 | 0X | Memory evaluation | Precision/recall metrics |
 | 18 | 0Y | A/B framework | Compare with/without memory |
 
@@ -255,15 +312,16 @@ Agent Prompt Injection (append to context)
 
 ```
 sentinel/memory/
-├── metrics.py       # RunMetrics, MemoryMetrics, UserMetrics
-├── models.py        # Memory, MemoryCandidate, ReviewEvent, FeedbackEvent
-├── store.py         # MemoryStore (JSON-backed)
-├── retriever.py     # Context-aware memory retrieval
-├── extractor.py     # Pattern mining from feedback
-├── validator.py     # Verify patterns against codebase
-├── conflict.py      # Resolve contradictory memories
-├── synthesizer.py   # Combine related memories
-├── temporal.py      # Aging, decay, expiration
-├── eval.py          # Evaluation metrics
-└── __init__.py      # Public API
+├── graph.py          # Graph, Node, GraphState (LangGraph-style)
+├── metrics.py        # RunMetrics, MemoryMetrics, UserMetrics
+├── models.py         # Memory, MemoryCandidate, ReviewEvent, FeedbackEvent
+├── store.py          # MemoryStore (SQLite-backed)
+├── retriever.py      # Context-aware memory retrieval
+├── extractor.py      # Pattern mining from feedback (extraction node)
+├── validator.py      # Verify patterns against codebase (validation node)
+├── conflict.py       # Resolve contradictory memories (conflict node)
+├── synthesizer.py    # Combine related memories (synthesis node)
+├── temporal.py       # Aging, decay, expiration
+├── eval.py           # Evaluation metrics
+└── __init__.py       # Public API
 ```
