@@ -20,7 +20,7 @@
 - [x] **Cost governance** — per-agent cost caps
 - [x] **Context hub** — versioned named profiles
 - [x] **Agent registry** — discoverable agent info with config schemas
-- [x] **CI** — GitHub Actions: ruff, ty, secrets scan, 758 tests, evals, simulations, sentinel review
+- [x] **CI** — GitHub Actions: ruff, ty, secrets scan, 797 tests, evals, simulations, sentinel review
 - [x] **Pre-commit hooks** — ruff, ty, secrets scan, coverage
 - [x] **Simulation engine** — 3 multi-turn scenarios
 - [x] **Eval datasets** — good_code (4 findings) + bad_code (89 findings)
@@ -28,7 +28,7 @@
 ## 📋 Next Up
 
 ### Language Support
-- [ ] **Go parser** — regex/line-based for `.go` files
+- [x] **Go parser** — regex/line-based for `.go` files
 - [ ] **Rust parser** — regex/line-based for `.rs` files
 - [ ] **PythonParser: async functions** — handle `AsyncFunctionDef` in `find_mutable_defaults` and `find_missing_type_hints`
 

@@ -11,6 +11,7 @@ Usage:
 from __future__ import annotations
 
 from .base import BaseParser
+from .go import GoParser
 from .javascript import JavaScriptParser
 from .null import NullParser
 from .python import PythonParser
@@ -26,6 +27,7 @@ class ParserRegistry:
             "typescript": JavaScriptParser(),
             "typescriptreact": JavaScriptParser(),
             "javascriptreact": JavaScriptParser(),
+            "go": GoParser(),
         }
 
     def register(self, language: str, parser: BaseParser) -> None:
@@ -53,6 +55,7 @@ def default_registry() -> ParserRegistry:
 
 __all__ = [
     "BaseParser",
+    "GoParser",
     "JavaScriptParser",
     "NullParser",
     "ParserRegistry",

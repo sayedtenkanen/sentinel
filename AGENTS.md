@@ -37,6 +37,7 @@ sentinel/
 │   ├── base.py          # BaseParser ABC (14 methods for language-agnostic analysis)
 │   ├── python.py        # PythonParser — full ast.* implementation
 │   ├── javascript.py    # JavaScriptParser — regex/line-based heuristics
+│   ├── go.py            # GoParser — regex/line-based heuristics
 │   ├── null.py          # NullParser — safe empty defaults for unsupported languages
 │   ├── models.py        # 11 typed dataclasses: FunctionLength, UnusedImport, etc.
 │   └── __init__.py      # ParserRegistry + default_registry singleton
@@ -189,7 +190,7 @@ git config core.hooksPath .githooks
 SKIP=lint,format,ty,secrets,coverage git commit -m "skip all hooks"
 ```
 
-Expected: 100% on both good_code and bad_code fixtures, **758 tests passing**, 3/3 simulation scenarios passing, 85%+ coverage, zero ruff/ty errors.
+Expected: 100% on both good_code and bad_code fixtures, **797 tests passing**, 3/3 simulation scenarios passing, 85%+ coverage, zero ruff/ty errors.
 
 ## Hybrid Execution Agent
 
