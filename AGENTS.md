@@ -40,6 +40,12 @@ sentinel/
 │   ├── null.py          # NullParser — safe empty defaults for unsupported languages
 │   ├── models.py        # 11 typed dataclasses: FunctionLength, UnusedImport, etc.
 │   └── __init__.py      # ParserRegistry + default_registry singleton
+├── memory/              # <-- Sentinel Memory (Dreaming-style memory system)
+│   ├── graph.py         # Graph, Node, GraphState (LangGraph-style DAG executor)
+│   ├── metrics.py       # RunMetrics, MemoryMetrics, UserMetrics + MetricsStore
+│   ├── models.py        # Memory, MemoryCandidate, ReviewEvent, FeedbackEvent
+│   ├── store.py         # MemoryStore (SQLite-backed persistent storage)
+│   └── __init__.py      # Public API exports
 ├── rag/
 │   ├── vector_store.py     # TF-IDF vector store + cosine similarity (pure Python)
 │   ├── knowledge_base.py   # Code chunking, CRUD for findings, JSON persistence
@@ -77,7 +83,7 @@ sentinel/
 | ADLC Phase | Implementation | Status |
 |---|---|---|
 | **Build** | 10 sub-agents (static-analysis, security, style, best-practices, documentation, architecture, refactor, summary) + optional (llm-review, execution-agent) + RAG (TF-IDF vector store, knowledge base, retriever) + risk-summary + orchestrator + tools (import-graph) + sandbox + tool registry + parsers (PythonParser, JavaScriptParser, NullParser) | ✅ Complete (architecture + refactor + risk-summary + import-graph added; parser abstraction layer with 3 parsers) |
-| **Test** | `test/evals.py` (2 fixtures, 100% score), `test/simulations.py` (3 scenarios, 6/6 steps), 609 unit tests | ✅ Complete (JS parser, NullParser tests added) |
+| **Test** | `test/evals.py` (2 fixtures, 100% score), `test/simulations.py` (3 scenarios, 6/6 steps), 659 unit tests | ✅ Complete (JS parser, NullParser tests added) |
 | **Deploy** | `deploy/runner.py` CLI with `--format`, `--output`, `--disable-agent`, `--trace-dir`, `--config`, `--cost-cap`, `--feedback`, `--workers`, `--llm-api-key`, `--llm-model`, `--rag-kb-dir`; `govern/context_hub.py` for versioned profiles | ✅ Complete (LLM + RAG flags added) |
 | **Monitor** | `monitor/tracer.py` captures trace events + metrics + feedbacks; `monitor/dashboard.py` HTML/JSON dashboard with `/api/feedback` POST endpoint | ✅ Complete (feedback pipeline added) |
 | **Govern** | `--disable-agent`, `suppress` rules, severity-weighted scoring, JSON audit trails; `govern/cost.py` cost caps; `govern/registry.py` agent discoverability (11 agents) | ✅ Complete (cost + registry added) |
@@ -174,7 +180,7 @@ git config core.hooksPath .githooks
 SKIP=lint,format,ty,secrets,coverage git commit -m "skip all hooks"
 ```
 
-Expected: 100% on both good_code and bad_code fixtures, **609 tests passing**, 3/3 simulation scenarios passing, 85%+ coverage, zero ruff/ty errors.
+Expected: 100% on both good_code and bad_code fixtures, **659 tests passing**, 3/3 simulation scenarios passing, 85%+ coverage, zero ruff/ty errors.
 
 ## Hybrid Execution Agent
 
@@ -207,6 +213,7 @@ Key design: the execution agent complements (does not replace) the 7 determinist
 | **Refactor Agent** (Build) | `sentinel/agents/refactor.py` — deterministic composite score from complexity/length/params, REF001 (medium/high) + REF002 (critical) |
 | **Risk Summary** (Build) | `sentinel/agents/risk_summary.py` — PR-level cross-file risk aggregation: concentration (RSK001-002), cross-cutting security (RSK003), architecture risk (RSK004), overall risk (RSK005) |
 | **Rule Miner** (Govern) | `sentinel/govern/rule_miner.py` — offline knowledge base mining for new rule suggestions, invoked via `python -m sentinel.govern.rule_miner --kb-dir ./kb` |
+| **Sentinel Memory** (Build) | `sentinel/memory/graph.py` — LangGraph-style DAG executor; `metrics.py` — RunMetrics/MemoryMetrics/UserMetrics + MetricsStore; `models.py` — Memory, MemoryCandidate; `store.py` — SQLite-backed MemoryStore |
 
 ## Key Design Decisions
 

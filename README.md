@@ -128,6 +128,7 @@ Agent source code, tools, and orchestration framework.
 | `sentinel/tools/` | `ast_tools.py`, `import_graph.py`, `config.py`, `git_tools.py`, `secrets_scanner.py`, `sandbox.py`, `tool_registry.py` | AST complexity analysis, import dependency graph builder, `.code-review.json` config loader, diff parsing + language detection (20+ extensions), standalone secrets scanner (20+ patterns), secure sandboxed execution, tool registry for hybrid agent |
 | `sentinel/parsers/` | `base.py`, `python.py`, `javascript.py`, `null.py`, `models.py` | Pluggable parser abstraction — `BaseParser` ABC (15 methods), `PythonParser` (full ast.*), `JavaScriptParser` (regex/line heuristics), `NullParser` (safe empty defaults), 11 typed dataclass models |
 | `sentinel/rag/` | `vector_store.py`, `knowledge_base.py`, `retriever.py` | TF-IDF vector store (pure Python), code chunking + knowledge base, similarity search + RAG prompt builder |
+| `sentinel/memory/` | `graph.py`, `metrics.py`, `models.py`, `store.py` | Sentinel Memory — LangGraph-style DAG executor, run/memory/user metrics, memory data models, SQLite-backed storage |
 | **Design** | | Zero external dependencies (pure stdlib). Agents are stateless and thread-safe. Parallelism via `ThreadPoolExecutor` with separate file and agent pools to avoid deadlock. RAG uses pure Python TF-IDF vector store with cosine similarity — no external vector DB needed. |
 
 ```bash
@@ -147,7 +148,7 @@ Regression datasets, eval suite, simulation engine, and unit tests.
 | **Eval datasets** | `sentinel/test/fixtures/good_code.py`, `bad_code.py` | Known-good (4 findings) and known-bad (89 findings) fixtures for regression testing |
 | **Eval runner** | `sentinel/test/evals.py` | Scores 100% when both datasets match expected finding counts |
 | **Simulation engine** | `sentinel/test/simulations.py` | 3 multi-turn scenarios (bad→good, no-regression, severity improves), 6/6 steps |
-| **Unit tests** | `tests/test_*.py` (27 files) | 609 tests covering all agents, tools, orchestrator, cost tracker, tracer, dashboard, context hub, registry, RAG, import graph, rule miner, architecture, refactor, risk summary, JS parser, NullParser |
+| **Unit tests** | `tests/test_*.py` (27 files) | 659 tests covering all agents, tools, orchestrator, cost tracker, tracer, dashboard, context hub, registry, RAG, import graph, rule miner, architecture, refactor, risk summary, JS parser, NullParser, memory store |
 
 ```bash
 python -m sentinel.test.evals
