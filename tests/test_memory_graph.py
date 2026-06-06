@@ -128,6 +128,12 @@ class TestGraph(unittest.TestCase):
             graph.add_edge(("a", "b"))
         self.assertIn("not found", str(ctx.exception))
 
+    def test_missing_target_error(self):
+        graph = Graph(nodes=[Node(name="a", fn=lambda s: s)])
+        with self.assertRaises(ValueError) as ctx:
+            graph.add_edge(("a", "b"))
+        self.assertIn("Target node 'b' not found", str(ctx.exception))
+
     def test_node_error_captures(self):
         def fail(state):
             raise RuntimeError("boom")
@@ -203,7 +209,7 @@ class TestLinearGraph(unittest.TestCase):
         self.assertEqual(len(graph.nodes), 3)
         self.assertEqual(len(graph.edges), 2)
 
-    def test_execution(self):
+    def test_execution_order(self):
         order = []
 
         def track(name):
@@ -222,6 +228,23 @@ class TestLinearGraph(unittest.TestCase):
         )
         graph.run(GraphState())
         self.assertEqual(order, ["a", "b"])
+
+    def test_linear_graph_execution_order(self):
+        order = []
+
+        def track(name):
+            def fn(state):
+                order.append(name)
+                return state
+
+            return fn
+
+        nodes = [Node(name=n, fn=track(n)) for n in ["x", "y", "z"]]
+        graph = Graph(nodes=nodes)
+        graph.add_edge(("x", "y"))
+        graph.add_edge(("y", "z"))
+        graph.run(GraphState())
+        self.assertEqual(order, ["x", "y", "z"])
 
 
 if __name__ == "__main__":

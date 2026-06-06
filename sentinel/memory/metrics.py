@@ -21,6 +21,7 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import uuid
 from dataclasses import dataclass, field
@@ -146,11 +147,14 @@ class MetricsStore:
 
     def store_run(self, metrics: RunMetrics) -> None:
         """Store run metrics."""
-        import json
-
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                """INSERT OR REPLACE INTO run_metrics VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT OR REPLACE INTO run_metrics
+                   (run_id, timestamp, files_reviewed, findings_total,
+                    findings_by_severity, findings_by_agent, agent_latencies,
+                    token_cost, duration_ms, memory_retrieved, memory_count,
+                    languages, metadata)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     metrics.run_id,
                     metrics.timestamp,
@@ -170,11 +174,14 @@ class MetricsStore:
 
     def store_memory(self, metrics: MemoryMetrics) -> None:
         """Store memory metrics."""
-        import json
-
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                """INSERT OR REPLACE INTO memory_metrics VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT OR REPLACE INTO memory_metrics
+                   (run_id, timestamp, memory_precision, memory_recall,
+                    contradiction_count, stale_memory_count, synthesis_count,
+                    memories_retrieved, memories_available, avg_memory_age_days,
+                    metadata)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     metrics.run_id,
                     metrics.timestamp,
@@ -192,11 +199,13 @@ class MetricsStore:
 
     def store_user(self, metrics: UserMetrics) -> None:
         """Store user metrics."""
-        import json
-
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                """INSERT OR REPLACE INTO user_metrics VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT OR REPLACE INTO user_metrics
+                   (run_id, timestamp, followup_reduction, feedback_accuracy,
+                    suppression_quality, total_feedback, correct_feedback,
+                    total_suppressions, true_suppressions, metadata)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     metrics.run_id,
                     metrics.timestamp,
@@ -218,8 +227,6 @@ class MetricsStore:
         limit: int = 100,
     ) -> list[RunMetrics]:
         """Query run metrics with optional time range."""
-        import json
-
         query = "SELECT * FROM run_metrics"
         params: list[Any] = []
         conditions: list[str] = []

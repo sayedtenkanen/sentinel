@@ -31,6 +31,7 @@ Usage:
 from __future__ import annotations
 
 import json
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -55,20 +56,31 @@ class GraphState:
     metrics: Any = None
     errors: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+    extras: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize state to dict (for checkpointing)."""
+        """Serialize state to dict (for checkpointing).
+
+        Preserves both declared fields and dynamically-added extras.
+        """
         from dataclasses import asdict
 
-        return asdict(self)
+        result = asdict(self)
+        return result
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> GraphState:
-        """Deserialize state from dict."""
+        """Deserialize state from dict.
+
+        Restores declared fields and stores unknown keys in extras.
+        """
         state = cls()
+        known_fields = {f.name for f in cls.__dataclass_fields__.values()}
         for key, value in data.items():
-            if hasattr(state, key):
+            if key in known_fields:
                 setattr(state, key, value)
+            elif key != "__dataclass_fields__":
+                state.extras[key] = value
         return state
 
 
@@ -127,11 +139,11 @@ def _build_adjacency(
 
 def _topological_sort(adjacency: dict[str, list[str]], in_degree: dict[str, int]) -> list[str]:
     """Kahn's algorithm for topological ordering."""
-    queue = [name for name, degree in in_degree.items() if degree == 0]
+    queue = deque(name for name, degree in in_degree.items() if degree == 0)
     order: list[str] = []
 
     while queue:
-        current = queue.pop(0)
+        current = queue.popleft()
         order.append(current)
         for neighbor in adjacency[current]:
             in_degree[neighbor] -= 1
@@ -142,7 +154,10 @@ def _topological_sort(adjacency: dict[str, list[str]], in_degree: dict[str, int]
 
 
 def _validate_range(order: list[str], start: str | None, end: str | None) -> tuple[int, int]:
-    """Validate start/end nodes and return (start_idx, end_idx)."""
+    """Validate start/end nodes and return (start_idx, end_idx).
+
+    Raises ValueError if start comes after end in execution order.
+    """
     start_idx = 0
     end_idx = len(order)
 
@@ -155,6 +170,11 @@ def _validate_range(order: list[str], start: str | None, end: str | None) -> tup
         if end not in order:
             raise ValueError(f"End node '{end}' not found")
         end_idx = order.index(end) + 1
+
+    if start is not None and end is not None and start_idx >= end_idx:
+        raise ValueError(
+            f"Invalid execution range: start node '{start}' comes after end node '{end}'"
+        )
 
     return start_idx, end_idx
 
