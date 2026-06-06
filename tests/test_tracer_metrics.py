@@ -4,9 +4,8 @@ import os
 import tempfile
 import unittest
 
-from sentinel.memory.metrics import MetricsStore, RunMetrics
-from sentinel.monitor.tracer import Tracer
 from sentinel.core.types import TraceEvent
+from sentinel.monitor.tracer import Tracer
 
 
 class TestTracerMetrics(unittest.TestCase):
