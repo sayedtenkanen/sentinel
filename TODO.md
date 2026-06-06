@@ -32,7 +32,7 @@
 ### Language Support
 - [x] **Go parser** — regex/line-based for `.go` files
 - [ ] **Rust parser** — regex/line-based for `.rs` files
-- [ ] **PythonParser: async functions** — handle `AsyncFunctionDef` in `find_mutable_defaults` and `find_missing_type_hints`
+- [x] **PythonParser: async functions** — handle `AsyncFunctionDef` in `find_mutable_defaults` and `find_missing_type_hints`
 
 ### Quality & Coverage
 - [ ] **More JS parser tests** — edge cases, TSX/JSX, async/await, nested arrow functions
