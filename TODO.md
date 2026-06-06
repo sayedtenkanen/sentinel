@@ -7,7 +7,7 @@
 - [x] **Phase 3: End-to-end wiring** — agents resolve parser per-file, `NullParser` fallback, `FileContext.language` set by runner
 - [x] **JavaScriptParser** — regex/line-based heuristics for JS/TS/JSX/TSX
 - [x] **GoParser** — regex/line-based heuristics for Go, code review fixes (catch keyword, receiver params, dotted imports, prefix-based naming)
-- [x] **JS + NullParser + Go tests** — 54 new tests (812 total), 100% evals, 6/6 sims
+- [x] **JS + NullParser + Go + Rust tests** — 102 new tests (860 total), 100% evals, 6/6 sims
 - [x] **10 sub-agents**: static-analysis, security, style, best-practices, documentation, architecture, refactor, risk-summary, llm-review, execution
 - [x] **Hybrid execution agent** — decision policy + sandboxed code execution + iterative fix loop
 - [x] **Secure sandbox** — restricted Python exec with import allow-list, timeout
@@ -31,7 +31,7 @@
 
 ### Language Support
 - [x] **Go parser** — regex/line-based for `.go` files
-- [ ] **Rust parser** — regex/line-based for `.rs` files
+- [x] **Rust parser** — regex/line-based for `.rs` files
 - [ ] **PythonParser: async functions** — handle `AsyncFunctionDef` in `find_mutable_defaults` and `find_missing_type_hints`
 
 ### Quality & Coverage
