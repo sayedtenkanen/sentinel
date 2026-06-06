@@ -60,6 +60,8 @@ python -m sentinel.monitor.dashboard --port 8080 --trace-dir ./traces
 sentinel/
 ├── core/           # Base agent, orchestrator, types, context
 ├── agents/         # Sub-agents (static analysis, security, style, architecture, refactor, etc.)
+├── parsers/        # Language-agnostic parser abstraction (Python, JS, Null)
+├── memory/         # Sentinel Memory (graph, metrics, models, store)
 ├── tools/          # AST parsing, import graph, git diff, config loader, secrets scanner, sandbox
 ├── reporting/      # Markdown and JSON report generators
 ├── rag/            # TF-IDF vector store, knowledge base, retriever
@@ -106,7 +108,7 @@ class YourAgent(BaseAgent):
 ## Running Tests
 
 ```bash
-# Unit tests (570 total)
+# Unit tests (659 total)
 python -m unittest discover -s tests/ -v
 
 # ADLC eval suite
