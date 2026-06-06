@@ -108,7 +108,7 @@ jobs:
         run: python -m sentinel.test.evals
 
   review:
-    needs: [require-pr, ruff-ty, security-scan, unit-tests, evals]
+    needs: [ruff-ty, security-scan, unit-tests, evals]
     runs-on: ubuntu-latest
     permissions:
       contents: read
