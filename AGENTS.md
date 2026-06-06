@@ -38,6 +38,7 @@ sentinel/
 │   ├── python.py        # PythonParser — full ast.* implementation
 │   ├── javascript.py    # JavaScriptParser — regex/line-based heuristics
 │   ├── go.py            # GoParser — regex/line-based heuristics
+│   ├── rust.py          # RustParser — regex/line-based heuristics
 │   ├── null.py          # NullParser — safe empty defaults for unsupported languages
 │   ├── models.py        # 11 typed dataclasses: FunctionLength, UnusedImport, etc.
 │   └── __init__.py      # ParserRegistry + default_registry singleton
