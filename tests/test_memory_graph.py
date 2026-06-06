@@ -4,7 +4,7 @@ import os
 import tempfile
 import unittest
 
-from sentinel.memory.graph import Edge, Graph, GraphState, Node, linear_graph
+from sentinel.memory.graph import Graph, GraphState, Node, linear_graph
 
 
 class TestGraphState(unittest.TestCase):
@@ -40,11 +40,11 @@ class TestNode(unittest.TestCase):
         self.assertEqual(result.candidates, ["new"])
 
     def test_condition_true(self):
-        node = Node(name="n", fn=lambda s: s, condition=lambda s: True)
+        node = Node(name="n", fn=lambda s: s, condition=lambda _: True)
         self.assertTrue(node.should_run(GraphState()))
 
     def test_condition_false(self):
-        node = Node(name="n", fn=lambda s: s, condition=lambda s: False)
+        node = Node(name="n", fn=lambda s: s, condition=lambda _: False)
         self.assertFalse(node.should_run(GraphState()))
 
     def test_no_condition(self):
@@ -68,7 +68,7 @@ class TestGraph(unittest.TestCase):
             edges=[("a", "b"), ("b", "c")],
         )
 
-        state = graph.run(GraphState())
+        graph.run(GraphState())
         self.assertEqual(order, ["a", "b", "c"])
 
     def test_conditional_skip(self):
@@ -84,19 +84,23 @@ class TestGraph(unittest.TestCase):
         graph = Graph(
             nodes=[
                 make_node("a"),
-                make_node("b", condition=lambda s: False),
+                make_node("b", condition=lambda _: False),
                 make_node("c"),
             ],
             edges=[("a", "b"), ("b", "c")],
         )
 
-        state = graph.run(GraphState())
+        graph.run(GraphState())
         self.assertEqual(order, ["a", "c"])
 
     def test_topological_sort(self):
         # b -> a -> c
         graph = Graph(
-            nodes=[Node(name="a", fn=lambda s: s), Node(name="b", fn=lambda s: s), Node(name="c", fn=lambda s: s)],
+            nodes=[
+                Node(name="a", fn=lambda s: s),
+                Node(name="b", fn=lambda s: s),
+                Node(name="c", fn=lambda s: s),
+            ],
             edges=[("b", "a"), ("a", "c")],
         )
         order = graph._resolve_execution_order()

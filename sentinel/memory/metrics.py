@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
@@ -33,9 +33,7 @@ class RunMetrics:
     """Metrics for a single review run."""
 
     run_id: str = field(default_factory=lambda: f"run_{uuid.uuid4().hex[:12]}")
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     files_reviewed: int = 0
     findings_total: int = 0
     findings_by_severity: dict[str, int] = field(default_factory=dict)
@@ -54,9 +52,7 @@ class MemoryMetrics:
     """Metrics for memory system quality."""
 
     run_id: str = field(default_factory=lambda: f"run_{uuid.uuid4().hex[:12]}")
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     memory_precision: float = 0.0  # correct retrievals / total retrievals
     memory_recall: float = 0.0  # useful memories / total available
     contradiction_count: int = 0
@@ -73,9 +69,7 @@ class UserMetrics:
     """Metrics for user experience and feedback quality."""
 
     run_id: str = field(default_factory=lambda: f"run_{uuid.uuid4().hex[:12]}")
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     followup_reduction: float = 0.0  # fewer follow-up questions
     feedback_accuracy: float = 0.0  # correct / total feedback
     suppression_quality: float = 0.0  # suppressed false positives / total suppressions
@@ -193,8 +187,6 @@ class MetricsStore:
 
     def store_user(self, metrics: UserMetrics) -> None:
         """Store user metrics."""
-        import json
-
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """INSERT OR REPLACE INTO user_metrics VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -262,8 +254,6 @@ class MetricsStore:
 
     def summary(self, since: str | None = None) -> dict[str, Any]:
         """Aggregate summary across all runs."""
-        import json
-
         query = "SELECT * FROM run_metrics"
         params: list[Any] = []
         if since:

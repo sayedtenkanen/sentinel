@@ -33,7 +33,7 @@ from __future__ import annotations
 import json
 import pickle
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 
 @dataclass
@@ -156,17 +156,19 @@ class Graph:
     ) -> None:
         """Add an edge between two nodes."""
         if isinstance(edge, tuple):
-            source, target = edge
-            edge = Edge(source=source, target=target, condition=condition)
+            edge_obj = Edge(source=edge[0], target=edge[1], condition=condition)  # ty: ignore[invalid-argument-type]
         elif condition is not None:
             edge.condition = condition
+            edge_obj = edge
+        else:
+            edge_obj = edge
 
-        if edge.source not in self.nodes:
-            raise ValueError(f"Source node '{edge.source}' not found")
-        if edge.target not in self.nodes:
-            raise ValueError(f"Target node '{edge.target}' not found")
+        if edge_obj.source not in self.nodes:
+            raise ValueError(f"Source node '{edge_obj.source}' not found")
+        if edge_obj.target not in self.nodes:
+            raise ValueError(f"Target node '{edge_obj.target}' not found")
 
-        self.edges.append(edge)
+        self.edges.append(edge_obj)
 
     def _resolve_execution_order(self) -> list[str]:
         """Topological sort of nodes for linear execution."""
