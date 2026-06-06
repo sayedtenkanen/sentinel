@@ -2,11 +2,12 @@
 
 ## ✅ Complete
 
-- [x] **Phase 1: Parser abstraction** — `BaseParser` ABC (15 methods), `PythonParser` (full `ast.*`), `ParserRegistry`
+- [x] **Phase 1: Parser abstraction** — `BaseParser` ABC (14 methods), `PythonParser` (full `ast.*`), `ParserRegistry`
 - [x] **Phase 2: Typed dataclass models** — 11 dataclasses replacing loose dicts (`FunctionLength`, `UnusedImport`, etc.)
 - [x] **Phase 3: End-to-end wiring** — agents resolve parser per-file, `NullParser` fallback, `FileContext.language` set by runner
 - [x] **JavaScriptParser** — regex/line-based heuristics for JS/TS/JSX/TSX
-- [x] **JS + NullParser tests** — 39 new tests (758 total), 100% evals, 6/6 sims
+- [x] **GoParser** — regex/line-based heuristics for Go, code review fixes (catch keyword, receiver params, dotted imports, prefix-based naming)
+- [x] **JS + NullParser + Go tests** — 54 new tests (812 total), 100% evals, 6/6 sims
 - [x] **10 sub-agents**: static-analysis, security, style, best-practices, documentation, architecture, refactor, risk-summary, llm-review, execution
 - [x] **Hybrid execution agent** — decision policy + sandboxed code execution + iterative fix loop
 - [x] **Secure sandbox** — restricted Python exec with import allow-list, timeout
@@ -20,7 +21,8 @@
 - [x] **Cost governance** — per-agent cost caps
 - [x] **Context hub** — versioned named profiles
 - [x] **Agent registry** — discoverable agent info with config schemas
-- [x] **CI** — GitHub Actions: ruff, ty, secrets scan, 797 tests, evals, simulations, sentinel review
+- [x] **CI** — GitHub Actions: ruff, ty, secrets scan, 812 tests, evals, simulations, sentinel review
+- [x] **Branch protection** — pre-push hook blocks main, CI guard job fails on direct push, 3-layer documentation
 - [x] **Pre-commit hooks** — ruff, ty, secrets scan, coverage
 - [x] **Simulation engine** — 3 multi-turn scenarios
 - [x] **Eval datasets** — good_code (4 findings) + bad_code (89 findings)
