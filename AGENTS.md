@@ -34,18 +34,27 @@ sentinel/
 │   ├── llm_review.py       # Optional LLM-powered review with RAG context retrieval
 │   └── summary.py          # Compiles final verdict, severity breakdown, cost summary
 ├── parsers/             # <-- Language-agnostic parser abstraction
-│   ├── base.py          # BaseParser ABC (15 methods for language-agnostic analysis)
+│   ├── base.py          # BaseParser ABC (14 methods for language-agnostic analysis)
 │   ├── python.py        # PythonParser — full ast.* implementation
 │   ├── javascript.py    # JavaScriptParser — regex/line-based heuristics
 │   ├── null.py          # NullParser — safe empty defaults for unsupported languages
 │   ├── models.py        # 11 typed dataclasses: FunctionLength, UnusedImport, etc.
 │   └── __init__.py      # ParserRegistry + default_registry singleton
 ├── memory/              # <-- Sentinel Memory (Dreaming-style memory system)
+│   ├── __init__.py      # Public API exports
 │   ├── graph.py         # Graph, Node, GraphState (LangGraph-style DAG executor)
 │   ├── metrics.py       # RunMetrics, MemoryMetrics, UserMetrics + MetricsStore
 │   ├── models.py        # Memory, MemoryCandidate, ReviewEvent, FeedbackEvent
 │   ├── store.py         # MemoryStore (SQLite-backed persistent storage)
-│   └── __init__.py      # Public API exports
+│   ├── retriever.py     # Context-aware memory retrieval
+│   ├── extractor.py     # Pattern mining from feedback (extraction node)
+│   ├── validator.py     # Verify patterns against codebase (validation node)
+│   ├── conflict.py      # Resolve contradictory memories (conflict node)
+│   ├── synthesizer.py   # Combine related memories (synthesis node)
+│   ├── temporal.py      # Aging, decay, expiration
+│   ├── consolidation.py # Periodic background synthesis
+│   ├── eval.py          # Evaluation metrics (precision, recall, F1)
+│   └── ab_framework.py  # A/B comparison with/without memory
 ├── rag/
 │   ├── vector_store.py     # TF-IDF vector store + cosine similarity (pure Python)
 │   ├── knowledge_base.py   # Code chunking, CRUD for findings, JSON persistence
@@ -83,8 +92,8 @@ sentinel/
 | ADLC Phase | Implementation | Status |
 |---|---|---|
 | **Build** | 10 sub-agents (static-analysis, security, style, best-practices, documentation, architecture, refactor, summary) + optional (llm-review, execution-agent) + RAG (TF-IDF vector store, knowledge base, retriever) + risk-summary + orchestrator + tools (import-graph) + sandbox + tool registry + parsers (PythonParser, JavaScriptParser, NullParser) | ✅ Complete (architecture + refactor + risk-summary + import-graph added; parser abstraction layer with 3 parsers) |
-| **Test** | `test/evals.py` (2 fixtures, 100% score), `test/simulations.py` (3 scenarios, 6/6 steps), 659 unit tests | ✅ Complete (JS parser, NullParser tests added) |
-| **Deploy** | `deploy/runner.py` CLI with `--format`, `--output`, `--disable-agent`, `--trace-dir`, `--config`, `--cost-cap`, `--feedback`, `--workers`, `--llm-api-key`, `--llm-model`, `--rag-kb-dir`; `govern/context_hub.py` for versioned profiles | ✅ Complete (LLM + RAG flags added) |
+| **Test** | `test/evals.py` (2 fixtures, 100% score), `test/simulations.py` (3 scenarios, 6/6 steps), 758 unit tests | ✅ Complete (JS parser, NullParser tests added) |
+| **Deploy** | `deploy/runner.py` CLI with `--format`, `--output`, `--disable-agent`, `--trace-dir`, `--config`, `--cost-cap`, `--feedback`, `--rating`, `--comment`, `--workers`, `--llm-api-key`, `--llm-model`, `--rag-kb-dir`, `--sandbox-timeout`, `--sandbox-retries`, `--metrics-dir`, `--memory-dir`, `--no-memory`, `--consolidate-memory`; `govern/context_hub.py` for versioned profiles | ✅ Complete (LLM + RAG + Memory flags added) |
 | **Monitor** | `monitor/tracer.py` captures trace events + metrics + feedbacks; `monitor/dashboard.py` HTML/JSON dashboard with `/api/feedback` POST endpoint | ✅ Complete (feedback pipeline added) |
 | **Govern** | `--disable-agent`, `suppress` rules, severity-weighted scoring, JSON audit trails; `govern/cost.py` cost caps; `govern/registry.py` agent discoverability (11 agents) | ✅ Complete (cost + registry added) |
 
@@ -180,7 +189,7 @@ git config core.hooksPath .githooks
 SKIP=lint,format,ty,secrets,coverage git commit -m "skip all hooks"
 ```
 
-Expected: 100% on both good_code and bad_code fixtures, **659 tests passing**, 3/3 simulation scenarios passing, 85%+ coverage, zero ruff/ty errors.
+Expected: 100% on both good_code and bad_code fixtures, **758 tests passing**, 3/3 simulation scenarios passing, 85%+ coverage, zero ruff/ty errors.
 
 ## Hybrid Execution Agent
 
@@ -202,7 +211,7 @@ Key design: the execution agent complements (does not replace) the 7 determinist
 | **Simulation Engine** (Test) | `sentinel/test/simulations.py` with 3 scenarios (bad→good, no regression, severity improves), 6/6 steps passing |
 | **Cost Governance** (Govern) | `sentinel/govern/cost.py` — `CostTracker` with per-agent rates, cost caps, summary in report |
 | **Context Hub** (Deploy) | `sentinel/govern/context_hub.py` — versioned named profiles with get/set/delete, SHA-256 version tracking |
-| **Agent Registry** (Govern) | `sentinel/govern/registry.py` — `AgentRegistry.default()` with 7 agents, config schemas, tag/capability search |
+| **Agent Registry** (Govern) | `sentinel/govern/registry.py` — `AgentRegistry.default()` with 11 agents, config schemas, tag/capability search |
 | **RAG Knowledge Base** (Build) | `sentinel/rag/vector_store.py` (TF-IDF), `knowledge_base.py` (chunking + persistence), `retriever.py` (similarity search) |
 | **LLM Review Agent** (Build) | `sentinel/agents/llm_review.py` — optional OpenAI-compatible agent with RAG context, wired via `--llm-api-key` |
 | **Hybrid Execution Agent** (Build) | `sentinel/agents/execution_agent.py` — hybrid tool + sandboxed code execution with decision policy and iterative fix loop |
@@ -213,7 +222,7 @@ Key design: the execution agent complements (does not replace) the 7 determinist
 | **Refactor Agent** (Build) | `sentinel/agents/refactor.py` — deterministic composite score from complexity/length/params, REF001 (medium/high) + REF002 (critical) |
 | **Risk Summary** (Build) | `sentinel/agents/risk_summary.py` — PR-level cross-file risk aggregation: concentration (RSK001-002), cross-cutting security (RSK003), architecture risk (RSK004), overall risk (RSK005) |
 | **Rule Miner** (Govern) | `sentinel/govern/rule_miner.py` — offline knowledge base mining for new rule suggestions, invoked via `python -m sentinel.govern.rule_miner --kb-dir ./kb` |
-| **Sentinel Memory** (Build) | `sentinel/memory/graph.py` — LangGraph-style DAG executor; `metrics.py` — RunMetrics/MemoryMetrics/UserMetrics + MetricsStore; `models.py` — Memory, MemoryCandidate; `store.py` — SQLite-backed MemoryStore |
+| **Sentinel Memory** (Build) | `sentinel/memory/` — LangGraph-style DAG executor (`graph.py`), metrics (`metrics.py`), data models (`models.py`), SQLite store (`store.py`), retriever, extractor, validator, conflict resolver, synthesizer, temporal logic, consolidation job, eval metrics, A/B framework |
 
 ## Key Design Decisions
 

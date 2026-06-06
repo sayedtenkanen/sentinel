@@ -6,7 +6,7 @@
 - [x] **Phase 2: Typed dataclass models** — 11 dataclasses replacing loose dicts (`FunctionLength`, `UnusedImport`, etc.)
 - [x] **Phase 3: End-to-end wiring** — agents resolve parser per-file, `NullParser` fallback, `FileContext.language` set by runner
 - [x] **JavaScriptParser** — regex/line-based heuristics for JS/TS/JSX/TSX
-- [x] **JS + NullParser tests** — 39 new tests (609 total), 100% evals, 6/6 sims
+- [x] **JS + NullParser tests** — 39 new tests (758 total), 100% evals, 6/6 sims
 - [x] **10 sub-agents**: static-analysis, security, style, best-practices, documentation, architecture, refactor, risk-summary, llm-review, execution
 - [x] **Hybrid execution agent** — decision policy + sandboxed code execution + iterative fix loop
 - [x] **Secure sandbox** — restricted Python exec with import allow-list, timeout
@@ -14,13 +14,13 @@
 - [x] **RAG** — TF-IDF vector store, knowledge base, retriever
 - [x] **Import graph** — cycle detection, fan-in/out, god modules
 - [x] **Rule miner** — offline knowledge base mining for new rule suggestions
-- [x] **CLI** — `--format`, `--output`, `--disable-agent`, `--trace-dir`, `--config`, `--cost-cap`, `--feedback`, `--workers`, `--llm-api-key`, `--llm-model`, `--rag-kb-dir`, `--sandbox-timeout`, `--sandbox-retries`
+- [x] **CLI** — `--format`, `--output`, `--disable-agent`, `--trace-dir`, `--config`, `--cost-cap`, `--feedback`, `--rating`, `--comment`, `--workers`, `--llm-api-key`, `--llm-model`, `--rag-kb-dir`, `--sandbox-timeout`, `--sandbox-retries`, `--metrics-dir`, `--memory-dir`, `--no-memory`, `--consolidate-memory`
 - [x] **Dashboard** — web UI with stats, traces, feedback API
 - [x] **Feedback pipeline** — store, export, CLI submission
 - [x] **Cost governance** — per-agent cost caps
 - [x] **Context hub** — versioned named profiles
 - [x] **Agent registry** — discoverable agent info with config schemas
-- [x] **CI** — GitHub Actions: ruff, ty, secrets scan, 609 tests, evals, simulations, sentinel review
+- [x] **CI** — GitHub Actions: ruff, ty, secrets scan, 758 tests, evals, simulations, sentinel review
 - [x] **Pre-commit hooks** — ruff, ty, secrets scan, coverage
 - [x] **Simulation engine** — 3 multi-turn scenarios
 - [x] **Eval datasets** — good_code (4 findings) + bad_code (89 findings)

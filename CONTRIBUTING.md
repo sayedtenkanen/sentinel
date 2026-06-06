@@ -31,7 +31,7 @@ python -m sentinel.deploy.runner file.py -o report.md
 # Disable specific agents
 python -m sentinel.deploy.runner file.py --disable-agent security --disable-agent style
 
-# Available agents: static-analysis, security, style, best-practices, documentation, architecture, refactor
+# Available agents: static-analysis, security, style, best-practices, documentation, architecture, refactor, llm-review, execution
 ```
 
 ## Tracing & Feedback
@@ -108,7 +108,7 @@ class YourAgent(BaseAgent):
 ## Running Tests
 
 ```bash
-# Unit tests (659 total)
+# Unit tests (758 total)
 python -m unittest discover -s tests/ -v
 
 # ADLC eval suite

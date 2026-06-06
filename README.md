@@ -105,8 +105,8 @@ flowchart TD
 |---|---|---|
 | **static-analysis** | 9 | Cyclomatic complexity, line length, nesting depth, unused imports, trailing whitespace |
 | **security** | 32 + secret scanner | eval/exec, pickle, SQLi, XSS, SSTI, hardcoded creds, JWT, AWS keys, weak crypto, XXE, and more |
-| **style** | 6 | Import ordering, naming conventions (CapWords/snake_case), docstrings, magic numbers, is-vs-== |
-| **best-practices** | 5 | Bare excepts, lambda assignments, mutable defaults, globals, type hints, context managers |
+| **style** | 10 | Import ordering, naming conventions (CapWords/snake_case), docstrings, magic numbers, is-vs-==, unnecessary else, inconsistent returns, undocumented params, unused imports |
+| **best-practices** | 9 | Bare excepts, lambda assignments, mutable defaults, globals, type hints, context managers, type comparisons, and more |
 | **documentation** | 6 | Module/function/class docstrings, inline comment coverage |
 | **architecture** | 4 (ARC001-004) | Circular dependencies, god modules, isolated/leaf modules via AST import graph |
 | **refactor** | 2 (REF001-002) | Composite refactor score from complexity, length, and parameter count |
@@ -126,9 +126,9 @@ Agent source code, tools, and orchestration framework.
 | `sentinel/agents/` | `static_analysis.py`, `security.py`, `style.py`, `best_practices.py`, `documentation.py`, `architecture.py`, `refactor.py`, `summary.py`, `llm_review.py`, `execution_agent.py` | 10 sub-agents — each has a self-contained `analyze()` method returning `list[Finding]`. Language-agnostic via injected `BaseParser`. `architecture` and `refactor` run automatically; `llm-review` + `execution` are optional |
 | `sentinel/core/` | `orchestrator.py`, `base_agent.py`, `context.py`, `types.py` | Orchestrator coordinates agents via two-level parallelism (file-level + agent-level), `BaseAgent` abstract class with `run()` lifecycle, `FileContext`/`ReviewReport`/`Finding` data models |
 | `sentinel/tools/` | `ast_tools.py`, `import_graph.py`, `config.py`, `git_tools.py`, `secrets_scanner.py`, `sandbox.py`, `tool_registry.py` | AST complexity analysis, import dependency graph builder, `.code-review.json` config loader, diff parsing + language detection (20+ extensions), standalone secrets scanner (20+ patterns), secure sandboxed execution, tool registry for hybrid agent |
-| `sentinel/parsers/` | `base.py`, `python.py`, `javascript.py`, `null.py`, `models.py` | Pluggable parser abstraction — `BaseParser` ABC (15 methods), `PythonParser` (full ast.*), `JavaScriptParser` (regex/line heuristics), `NullParser` (safe empty defaults), 11 typed dataclass models |
+| `sentinel/parsers/` | `base.py`, `python.py`, `javascript.py`, `null.py`, `models.py` | Pluggable parser abstraction — `BaseParser` ABC (14 methods), `PythonParser` (full ast.*), `JavaScriptParser` (regex/line heuristics), `NullParser` (safe empty defaults), 11 typed dataclass models |
 | `sentinel/rag/` | `vector_store.py`, `knowledge_base.py`, `retriever.py` | TF-IDF vector store (pure Python), code chunking + knowledge base, similarity search + RAG prompt builder |
-| `sentinel/memory/` | `graph.py`, `metrics.py`, `models.py`, `store.py` | Sentinel Memory — LangGraph-style DAG executor, run/memory/user metrics, memory data models, SQLite-backed storage |
+| `sentinel/memory/` | `graph.py`, `metrics.py`, `models.py`, `store.py`, `retriever.py`, `extractor.py`, `validator.py`, `conflict.py`, `synthesizer.py`, `temporal.py`, `consolidation.py`, `eval.py`, `ab_framework.py` | Sentinel Memory — LangGraph-style DAG executor, run/memory/user metrics, memory data models, SQLite-backed storage, context-aware retrieval, pattern mining, validation, conflict resolution, synthesis, temporal logic, consolidation, evaluation, A/B framework |
 | **Design** | | Zero external dependencies (pure stdlib). Agents are stateless and thread-safe. Parallelism via `ThreadPoolExecutor` with separate file and agent pools to avoid deadlock. RAG uses pure Python TF-IDF vector store with cosine similarity — no external vector DB needed. |
 
 ```bash
@@ -148,7 +148,7 @@ Regression datasets, eval suite, simulation engine, and unit tests.
 | **Eval datasets** | `sentinel/test/fixtures/good_code.py`, `bad_code.py` | Known-good (4 findings) and known-bad (89 findings) fixtures for regression testing |
 | **Eval runner** | `sentinel/test/evals.py` | Scores 100% when both datasets match expected finding counts |
 | **Simulation engine** | `sentinel/test/simulations.py` | 3 multi-turn scenarios (bad→good, no-regression, severity improves), 6/6 steps |
-| **Unit tests** | `tests/test_*.py` (27 files) | 659 tests covering all agents, tools, orchestrator, cost tracker, tracer, dashboard, context hub, registry, RAG, import graph, rule miner, architecture, refactor, risk summary, JS parser, NullParser, memory store |
+| **Unit tests** | `tests/test_*.py` (30 files) | 758 tests covering all agents, tools, orchestrator, cost tracker, tracer, dashboard, context hub, registry, RAG, import graph, rule miner, architecture, refactor, risk summary, JS parser, NullParser, memory store, memory pipeline |
 
 ```bash
 python -m sentinel.test.evals
@@ -162,7 +162,7 @@ CLI entry point and infrastructure for versioned configuration.
 
 | Component | Files | Purpose |
 |---|---|---|
-| **CLI runner** | `sentinel/deploy/runner.py` | `main()` entry point — parses args, loads config, runs orchestrator, writes output. Supports `--format`, `--output`, `--disable-agent`, `--trace-dir`, `--verbose`, `--config`, `--cost-cap`, `--feedback`, `--workers`, `--llm-api-key`, `--llm-model`, `--rag-kb-dir` |
+| **CLI runner** | `sentinel/deploy/runner.py` | `main()` entry point — parses args, loads config, runs orchestrator, writes output. Supports `--format`, `--output`, `--disable-agent`, `--trace-dir`, `--verbose`, `--config`, `--cost-cap`, `--feedback`, `--rating`, `--comment`, `--workers`, `--llm-api-key`, `--llm-model`, `--rag-kb-dir`, `--sandbox-timeout`, `--sandbox-retries`, `--metrics-dir`, `--memory-dir`, `--no-memory`, `--consolidate-memory` |
 | **Context Hub** | `sentinel/govern/context_hub.py` | Versioned named profiles — `get/set/delete` with SHA-256 version tracking per entry, stored as JSON files |
 | **Config** | `.code-review.json` | Thresholds (complexity 80, nesting 8, function length 80, params 12), suppress rules with fnmatch on rule_id/file, per-agent thresholds |
 
