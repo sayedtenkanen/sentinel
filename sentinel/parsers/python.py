@@ -253,7 +253,10 @@ class PythonParser(BaseParser):
             tree = ast.parse(source)
             for node in ast.walk(tree):
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    for default in node.args.defaults:
+                    all_defaults = list(node.args.defaults) + [
+                        d for d in node.args.kw_defaults if d is not None
+                    ]
+                    for default in all_defaults:
                         if isinstance(default, (ast.List, ast.Dict, ast.Set)):
                             results.append(
                                 MutableDefault(
