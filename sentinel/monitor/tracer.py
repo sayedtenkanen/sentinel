@@ -24,6 +24,7 @@ class Tracer:
         log_dir: str | None = None,
         enabled: bool = True,
         feedback_dir: str | None = None,
+        metrics_dir: str | None = None,
     ) -> None:
         self.enabled = enabled
         self._events: list[TraceEvent] = []
@@ -31,6 +32,14 @@ class Tracer:
         self._feedbacks: list[Feedback] = []
         self.log_dir = log_dir
         self.feedback_dir = feedback_dir or log_dir
+        self.metrics_dir = metrics_dir
+        self._metrics_store = None
+
+        if metrics_dir:
+            from ..memory.metrics import MetricsStore
+
+            os.makedirs(metrics_dir, exist_ok=True)
+            self._metrics_store = MetricsStore(os.path.join(metrics_dir, "metrics.db"))
 
     def trace(self, event: TraceEvent) -> None:
         if not self.enabled:
@@ -147,3 +156,51 @@ class Tracer:
         self.export_trace(path)
         if self._feedbacks:
             self.export_feedback(f"trace_{timestamp}.json")
+
+    def collect_run_metrics(
+        self,
+        files_reviewed: int = 0,
+        languages: dict[str, int] | None = None,
+    ) -> None:
+        """Extract RunMetrics from collected trace events and store them.
+
+        Aggregates agent latencies, findings counts, and durations from
+        the trace events captured during a review run.
+        """
+        if not self._metrics_store:
+            return
+
+        from ..memory.metrics import RunMetrics
+
+        agent_latencies: dict[str, float] = {}
+        findings_by_agent: dict[str, int] = {}
+        findings_total = 0
+        duration_ms = 0.0
+
+        for event in self._events:
+            if event.event == "run.completed":
+                agent_latencies[event.agent_name] = (
+                    agent_latencies.get(event.agent_name, 0) + event.duration_ms
+                )
+                count = event.metadata.get("findings", 0)
+                if count:
+                    findings_by_agent[event.agent_name] = (
+                        findings_by_agent.get(event.agent_name, 0) + count
+                    )
+                    findings_total += count
+            elif event.event == "review.completed":
+                duration_ms = event.duration_ms
+
+        metrics = RunMetrics(
+            files_reviewed=files_reviewed,
+            findings_total=findings_total,
+            findings_by_agent=findings_by_agent,
+            agent_latencies=agent_latencies,
+            duration_ms=duration_ms,
+            languages=languages or {},
+        )
+        self._metrics_store.store_run(metrics)
+
+    def flush_metrics(self) -> None:
+        """Flush collected metrics to the metrics store."""
+        self.collect_run_metrics()

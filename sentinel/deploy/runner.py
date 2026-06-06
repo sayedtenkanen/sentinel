@@ -162,6 +162,11 @@ def create_parser() -> argparse.ArgumentParser:
         default=3,
         help="Max sandbox code fix retries (default: 3)",
     )
+    parser.add_argument(
+        "--metrics-dir",
+        type=str,
+        help="Directory to store run metrics for evaluation (ADLC Monitor phase)",
+    )
     return parser
 
 
@@ -305,7 +310,7 @@ def main(argv: list[str] | None = None) -> int:
     if exclude_patterns and args.verbose:
         print(f"Excluding patterns: {exclude_patterns}", file=sys.stderr)
 
-    tracer = Tracer(log_dir=args.trace_dir, enabled=True)
+    tracer = Tracer(log_dir=args.trace_dir, enabled=True, metrics_dir=args.metrics_dir)
     cost_tracker = CostTracker(cost_cap=args.cost_cap)
     agents = _setup_agents(cfg, set(args.disable_agent or []), args)
     orchestrator = Orchestrator(
@@ -342,6 +347,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.verbose:
         _print_trace_summary(tracer)
         print(f"💰 {cost_tracker.report.summary_line()}", file=sys.stderr)
+
+    if args.metrics_dir:
+        languages: dict[str, int] = {}
+        for _path, _, lang in files:
+            if lang:
+                languages[lang] = languages.get(lang, 0) + 1
+        tracer.collect_run_metrics(files_reviewed=len(files), languages=languages)
 
     _write_output(report, summary_text, args, tracer)
     return 0 if report.score >= 50 else 1
