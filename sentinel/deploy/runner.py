@@ -301,8 +301,13 @@ def _setup_memory(memory_dir: str) -> dict | None:
     return {"retriever": retriever, "store": store, "path": mem_path}
 
 
-def _run_consolidation(memory_dir: str, _files: list[tuple[str, str, str]]) -> None:
-    """Run memory consolidation after review."""
+def _run_consolidation(memory_dir: str) -> None:
+    """Run memory consolidation after review.
+
+    Consolidation is a maintenance task that operates on existing memories
+    in the store (expiry, synthesis). It does not receive review events —
+    those are extracted during the next review session via the extractor.
+    """
     from pathlib import Path
 
     from ..memory.consolidation import ConsolidationJob
@@ -420,7 +425,7 @@ def main(argv: list[str] | None = None) -> int:
         tracer.collect_run_metrics(files_reviewed=len(files), languages=languages)
 
     if args.consolidate_memory and args.memory_dir:
-        _run_consolidation(args.memory_dir, files)
+        _run_consolidation(args.memory_dir)
 
     _write_output(report, summary_text, args, tracer)
     return 0 if report.score >= 50 else 1

@@ -39,6 +39,21 @@ class TemporalManager:
     def __init__(self, config: TemporalConfig | None = None):
         self.config = config or TemporalConfig()
 
+    @staticmethod
+    def _normalize_timestamp(ts: str) -> datetime:
+        """Parse an ISO timestamp and ensure it is timezone-aware (UTC).
+
+        Handles:
+        - Timezone-aware strings (e.g., '2025-01-01T00:00:00+00:00')
+        - Naive strings (e.g., '2025-01-01T00:00:00') — assumed UTC
+        - 'Z' suffix (e.g., '2025-01-01T00:00:00Z') — treated as UTC
+        """
+        normalized = ts.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(normalized)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+
     def find_expired(self, memories: list[Memory]) -> list[Memory]:
         """Find memories that have expired based on their type."""
         now = datetime.now(timezone.utc)
@@ -76,7 +91,7 @@ class TemporalManager:
             return 1.0
 
         try:
-            created = datetime.fromisoformat(memory.created_at)
+            created = self._normalize_timestamp(memory.created_at)
             age_days = (datetime.now(timezone.utc) - created).days
             decay = 0.5 ** (age_days / half_life)
             return max(0.0, min(1.0, decay))
@@ -91,7 +106,7 @@ class TemporalManager:
     def get_age_days(self, memory: Memory) -> int:
         """Get the age of a memory in days."""
         try:
-            created = datetime.fromisoformat(memory.created_at)
+            created = self._normalize_timestamp(memory.created_at)
             return (datetime.now(timezone.utc) - created).days
         except (ValueError, TypeError):
             return 0
@@ -100,7 +115,7 @@ class TemporalManager:
         """Check if a memory has expired."""
         if memory.expires_at:
             try:
-                expires = datetime.fromisoformat(memory.expires_at)
+                expires = self._normalize_timestamp(memory.expires_at)
                 return now > expires
             except (ValueError, TypeError):
                 return False
@@ -110,7 +125,7 @@ class TemporalManager:
             return False
 
         try:
-            created = datetime.fromisoformat(memory.created_at)
+            created = self._normalize_timestamp(memory.created_at)
             age = (now - created).days
             return age > archive_days
         except (ValueError, TypeError):
@@ -123,7 +138,7 @@ class TemporalManager:
             return False
 
         try:
-            created = datetime.fromisoformat(memory.created_at)
+            created = self._normalize_timestamp(memory.created_at)
             age = (now - created).days
             return age > archive_days * 0.8
         except (ValueError, TypeError):

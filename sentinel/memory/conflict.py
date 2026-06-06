@@ -32,6 +32,15 @@ class MemoryConflictResolver:
         result = resolver.resolve(candidates, existing_memories)
     """
 
+    @staticmethod
+    def _normalize_timestamp(ts: str) -> datetime:
+        """Parse an ISO timestamp and ensure it is timezone-aware (UTC)."""
+        normalized = ts.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(normalized)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+
     def resolve(
         self,
         candidates: list[MemoryCandidate],
@@ -73,9 +82,13 @@ class MemoryConflictResolver:
 
     def _is_conflict(self, candidate: MemoryCandidate, memory: Memory) -> bool:
         """Check if a candidate conflicts with an existing memory."""
-        if candidate.type != memory.type:
-            return False
+        if candidate.type == memory.type:
+            return self._is_same_type_conflict(candidate, memory)
 
+        return self._is_preference_vs_rule_conflict(candidate, memory)
+
+    def _is_same_type_conflict(self, candidate: MemoryCandidate, memory: Memory) -> bool:
+        """Check for conflicts between candidates and memories of the same type."""
         candidate_rule = candidate.content.get("rule_id")
         memory_rule = memory.content.get("rule_id")
 
@@ -95,11 +108,48 @@ class MemoryConflictResolver:
 
         return False
 
+    def _is_preference_vs_rule_conflict(self, candidate: MemoryCandidate, memory: Memory) -> bool:
+        """Check if a preference candidate conflicts with an existing rule memory.
+
+        A user preference about a rule (e.g., "SEC001 is correct") conflicts
+        with an existing rule memory that has a different feedback pattern
+        for the same rule.
+        """
+        if candidate.type != MemoryType.PREFERENCE or memory.type != MemoryType.RULE:
+            return False
+
+        candidate_rule = candidate.content.get("rule_id")
+        memory_rule = memory.content.get("rule_id")
+
+        if not candidate_rule or not memory_rule:
+            return False
+
+        if candidate_rule != memory_rule:
+            return False
+
+        candidate_pref = candidate.content.get("preferred_feedback")
+        memory_pattern = memory.content.get("feedback_pattern")
+
+        if candidate_pref and memory_pattern:
+            return candidate_pref != memory_pattern
+
+        return False
+
     def _resolve_conflict(self, candidate: MemoryCandidate, conflicting: list[Memory]) -> Memory:
-        """Resolve conflict using priority rules."""
+        """Resolve conflict using priority rules.
+
+        Rules:
+        1. User preference vs. global rule: preference wins
+        2. Latest observation wins (newer timestamp)
+        3. Fresh observation beats stale memory (>30 days old)
+        4. Higher confidence existing memory wins over low-confidence candidate
+        """
         for existing in conflicting:
             if self._user_preference_wins(candidate, existing):
                 return self._candidate_to_memory(candidate)
+
+            if self._existing_wins_by_confidence(candidate, existing):
+                return existing
 
             if self._latest_wins(candidate, existing):
                 return self._candidate_to_memory(candidate)
@@ -113,11 +163,19 @@ class MemoryConflictResolver:
         """User preference beats global rule."""
         return candidate.type == MemoryType.PREFERENCE and existing.type == MemoryType.RULE
 
+    def _existing_wins_by_confidence(self, candidate: MemoryCandidate, existing: Memory) -> bool:
+        """Existing memory wins if it has significantly higher confidence.
+
+        An existing memory with confidence >= 0.9 and a candidate with
+        confidence < 0.6 is kept, since the existing memory is well-established.
+        """
+        return existing.confidence >= 0.9 and candidate.confidence < 0.6
+
     def _latest_wins(self, candidate: MemoryCandidate, existing: Memory) -> bool:
         """Latest observation wins for same type."""
         try:
-            candidate_time = datetime.fromisoformat(candidate.extracted_at)
-            existing_time = datetime.fromisoformat(existing.created_at)
+            candidate_time = self._normalize_timestamp(candidate.extracted_at)
+            existing_time = self._normalize_timestamp(existing.created_at)
             return candidate_time > existing_time
         except (ValueError, TypeError):
             return True
@@ -125,8 +183,8 @@ class MemoryConflictResolver:
     def _fresh_wins(self, candidate: MemoryCandidate, existing: Memory) -> bool:
         """Fresh observation beats stale memory."""
         try:
-            candidate_time = datetime.fromisoformat(candidate.extracted_at)
-            existing_time = datetime.fromisoformat(existing.last_used_at)
+            candidate_time = self._normalize_timestamp(candidate.extracted_at)
+            existing_time = self._normalize_timestamp(existing.last_used_at)
             age = (datetime.now(timezone.utc) - existing_time).days
             return age > 30 and candidate_time > existing_time
         except (ValueError, TypeError):
