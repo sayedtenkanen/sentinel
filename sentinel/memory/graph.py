@@ -31,7 +31,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import pickle
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -112,6 +111,73 @@ class Edge:
         return self.condition(state)
 
 
+def _build_adjacency(
+    edges: list[Edge], node_names: set[str]
+) -> tuple[dict[str, list[str]], dict[str, int]]:
+    """Build adjacency list and in-degree map from edges."""
+    adjacency: dict[str, list[str]] = {name: [] for name in node_names}
+    in_degree: dict[str, int] = {name: 0 for name in node_names}
+
+    for edge in edges:
+        adjacency[edge.source].append(edge.target)
+        in_degree[edge.target] += 1
+
+    return adjacency, in_degree
+
+
+def _topological_sort(adjacency: dict[str, list[str]], in_degree: dict[str, int]) -> list[str]:
+    """Kahn's algorithm for topological ordering."""
+    queue = [name for name, degree in in_degree.items() if degree == 0]
+    order: list[str] = []
+
+    while queue:
+        current = queue.pop(0)
+        order.append(current)
+        for neighbor in adjacency[current]:
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+
+    return order
+
+
+def _validate_range(order: list[str], start: str | None, end: str | None) -> tuple[int, int]:
+    """Validate start/end nodes and return (start_idx, end_idx)."""
+    start_idx = 0
+    end_idx = len(order)
+
+    if start:
+        if start not in order:
+            raise ValueError(f"Start node '{start}' not found")
+        start_idx = order.index(start)
+
+    if end:
+        if end not in order:
+            raise ValueError(f"End node '{end}' not found")
+        end_idx = order.index(end) + 1
+
+    return start_idx, end_idx
+
+
+def _execute_node(node: Node, state: GraphState) -> tuple[GraphState, bool]:
+    """Execute a node, returning (new_state, should_continue)."""
+    if not node.should_run(state):
+        return state, True
+
+    try:
+        new_state = node.execute(state)
+    except Exception as e:
+        state.errors.append(f"Node '{node.name}' failed: {e}")
+        return state, False
+
+    return new_state, True
+
+
+def _check_edge_termination(edges: list[Edge], source: str, state: GraphState) -> bool:
+    """Check if any outgoing edge from source should terminate execution."""
+    return any(edge.source == source and not edge.should_traverse(state) for edge in edges)
+
+
 class Graph:
     """Lightweight DAG executor with checkpointing.
 
@@ -119,7 +185,7 @@ class Graph:
         - Linear execution (A → B → C)
         - Conditional routing (if/else edges)
         - Node skipping (condition guards)
-        - Checkpoint/restore (pickle or JSON)
+        - Checkpoint/restore (JSON only)
 
     Usage:
         graph = Graph(nodes=[a, b, c], edges=[("a", "b"), ("b", "c")])
@@ -155,13 +221,7 @@ class Graph:
         condition: Callable[[GraphState], bool] | None = None,
     ) -> None:
         """Add an edge between two nodes."""
-        if isinstance(edge, tuple):
-            edge_obj = Edge(source=edge[0], target=edge[1], condition=condition)  # ty: ignore[invalid-argument-type]
-        elif condition is not None:
-            edge.condition = condition
-            edge_obj = edge
-        else:
-            edge_obj = edge
+        edge_obj = self._make_edge(edge, condition)
 
         if edge_obj.source not in self.nodes:
             raise ValueError(f"Source node '{edge_obj.source}' not found")
@@ -170,30 +230,25 @@ class Graph:
 
         self.edges.append(edge_obj)
 
+    def _make_edge(
+        self,
+        edge: tuple[str, str] | Edge,
+        condition: Callable[[GraphState], bool] | None,
+    ) -> Edge:
+        """Convert tuple or Edge with optional condition override."""
+        if isinstance(edge, tuple):
+            return Edge(source=edge[0], target=edge[1], condition=condition)  # ty: ignore[invalid-argument-type]
+        if condition is not None:
+            edge.condition = condition
+        return edge
+
     def _resolve_execution_order(self) -> list[str]:
         """Topological sort of nodes for linear execution."""
         if self._execution_order:
             return self._execution_order
 
-        # Build adjacency list
-        in_degree: dict[str, int] = {name: 0 for name in self.nodes}
-        adjacency: dict[str, list[str]] = {name: [] for name in self.nodes}
-
-        for edge in self.edges:
-            adjacency[edge.source].append(edge.target)
-            in_degree[edge.target] += 1
-
-        # Kahn's algorithm
-        queue = [name for name, degree in in_degree.items() if degree == 0]
-        order: list[str] = []
-
-        while queue:
-            current = queue.pop(0)
-            order.append(current)
-            for neighbor in adjacency[current]:
-                in_degree[neighbor] -= 1
-                if in_degree[neighbor] == 0:
-                    queue.append(neighbor)
+        adjacency, in_degree = _build_adjacency(self.edges, set(self.nodes.keys()))
+        order = _topological_sort(adjacency, in_degree)
 
         if len(order) != len(self.nodes):
             raise ValueError("Graph contains a cycle")
@@ -218,69 +273,32 @@ class Graph:
             Final graph state after all nodes execute.
         """
         order = self._resolve_execution_order()
-        start_idx = 0
-        end_idx = len(order)
-
-        if start:
-            if start not in order:
-                raise ValueError(f"Start node '{start}' not found")
-            start_idx = order.index(start)
-
-        if end:
-            if end not in order:
-                raise ValueError(f"End node '{end}' not found")
-            end_idx = order.index(end) + 1
-
+        start_idx, end_idx = _validate_range(order, start, end)
         current_state = state
 
         for i in range(start_idx, end_idx):
             node_name = order[i]
             node = self.nodes[node_name]
 
-            # Check node condition
-            if not node.should_run(current_state):
-                continue
-
-            # Execute node
-            try:
-                current_state = node.execute(current_state)
-            except Exception as e:
-                current_state.errors.append(f"Node '{node_name}' failed: {e}")
+            current_state, should_continue = _execute_node(node, current_state)
+            if not should_continue:
                 break
 
-            # Check edge conditions for early termination
-            should_stop = False
-            for edge in self.edges:
-                if edge.source == node_name and not edge.should_traverse(current_state):
-                    should_stop = True
-                    break
-            if should_stop:
+            if _check_edge_termination(self.edges, node_name, current_state):
                 break
 
         return current_state
 
-    def checkpoint(self, state: GraphState, path: str, format: str = "pickle") -> None:
-        """Save state to checkpoint file."""
-        if format == "pickle":
-            with open(path, "wb") as f:
-                pickle.dump(state, f)
-        elif format == "json":
-            with open(path, "w") as f:
-                json.dump(state.to_dict(), f, indent=2, default=str)
-        else:
-            raise ValueError(f"Unknown format: {format}")
+    def checkpoint(self, state: GraphState, path: str) -> None:
+        """Save state to JSON checkpoint file."""
+        with open(path, "w") as f:
+            json.dump(state.to_dict(), f, indent=2, default=str)
 
-    def restore(self, path: str, format: str = "pickle") -> GraphState:
-        """Restore state from checkpoint file."""
-        if format == "pickle":
-            with open(path, "rb") as f:
-                return pickle.load(f)
-        elif format == "json":
-            with open(path) as f:
-                data = json.load(f)
-            return GraphState.from_dict(data)
-        else:
-            raise ValueError(f"Unknown format: {format}")
+    def restore(self, path: str) -> GraphState:
+        """Restore state from JSON checkpoint file."""
+        with open(path) as f:
+            data = json.load(f)
+        return GraphState.from_dict(data)
 
     def visualize(self) -> str:
         """Return ASCII representation of the graph."""

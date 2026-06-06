@@ -142,21 +142,6 @@ class TestGraph(unittest.TestCase):
 
 
 class TestCheckpoint(unittest.TestCase):
-    def test_pickle_checkpoint(self):
-        graph = Graph(nodes=[Node(name="a", fn=lambda s: s)])
-        state = GraphState()
-        state.candidates = ["test"]
-
-        with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as f:
-            path = f.name
-
-        try:
-            graph.checkpoint(state, path, format="pickle")
-            restored = graph.restore(path, format="pickle")
-            self.assertEqual(restored.candidates, ["test"])
-        finally:
-            os.unlink(path)
-
     def test_json_checkpoint(self):
         graph = Graph(nodes=[Node(name="a", fn=lambda s: s)])
         state = GraphState()
@@ -166,8 +151,8 @@ class TestCheckpoint(unittest.TestCase):
             path = f.name
 
         try:
-            graph.checkpoint(state, path, format="json")
-            restored = graph.restore(path, format="json")
+            graph.checkpoint(state, path)
+            restored = graph.restore(path)
             self.assertEqual(restored.candidates, ["test"])
         finally:
             os.unlink(path)

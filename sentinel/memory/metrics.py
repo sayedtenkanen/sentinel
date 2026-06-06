@@ -80,6 +80,56 @@ class UserMetrics:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+_RUN_METRICS_DDL = """
+    CREATE TABLE IF NOT EXISTS run_metrics (
+        run_id TEXT PRIMARY KEY,
+        timestamp TEXT,
+        files_reviewed INTEGER,
+        findings_total INTEGER,
+        findings_by_severity TEXT,
+        findings_by_agent TEXT,
+        agent_latencies TEXT,
+        token_cost REAL,
+        duration_ms REAL,
+        memory_retrieved INTEGER,
+        memory_count INTEGER,
+        languages TEXT,
+        metadata TEXT
+    )
+"""
+
+_MEMORY_METRICS_DDL = """
+    CREATE TABLE IF NOT EXISTS memory_metrics (
+        run_id TEXT PRIMARY KEY,
+        timestamp TEXT,
+        memory_precision REAL,
+        memory_recall REAL,
+        contradiction_count INTEGER,
+        stale_memory_count INTEGER,
+        synthesis_count INTEGER,
+        memories_retrieved INTEGER,
+        memories_available INTEGER,
+        avg_memory_age_days REAL,
+        metadata TEXT
+    )
+"""
+
+_USER_METRICS_DDL = """
+    CREATE TABLE IF NOT EXISTS user_metrics (
+        run_id TEXT PRIMARY KEY,
+        timestamp TEXT,
+        followup_reduction REAL,
+        feedback_accuracy REAL,
+        suppression_quality REAL,
+        total_feedback INTEGER,
+        correct_feedback INTEGER,
+        total_suppressions INTEGER,
+        true_suppressions INTEGER,
+        metadata TEXT
+    )
+"""
+
+
 class MetricsStore:
     """SQLite-backed metrics storage for temporal queries."""
 
@@ -90,54 +140,9 @@ class MetricsStore:
     def _init_db(self) -> None:
         """Create tables if they don't exist."""
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS run_metrics (
-                    run_id TEXT PRIMARY KEY,
-                    timestamp TEXT,
-                    files_reviewed INTEGER,
-                    findings_total INTEGER,
-                    findings_by_severity TEXT,
-                    findings_by_agent TEXT,
-                    agent_latencies TEXT,
-                    token_cost REAL,
-                    duration_ms REAL,
-                    memory_retrieved INTEGER,
-                    memory_count INTEGER,
-                    languages TEXT,
-                    metadata TEXT
-                )
-            """)
-
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS memory_metrics (
-                    run_id TEXT PRIMARY KEY,
-                    timestamp TEXT,
-                    memory_precision REAL,
-                    memory_recall REAL,
-                    contradiction_count INTEGER,
-                    stale_memory_count INTEGER,
-                    synthesis_count INTEGER,
-                    memories_retrieved INTEGER,
-                    memories_available INTEGER,
-                    avg_memory_age_days REAL,
-                    metadata TEXT
-                )
-            """)
-
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS user_metrics (
-                    run_id TEXT PRIMARY KEY,
-                    timestamp TEXT,
-                    followup_reduction REAL,
-                    feedback_accuracy REAL,
-                    suppression_quality REAL,
-                    total_feedback INTEGER,
-                    correct_feedback INTEGER,
-                    total_suppressions INTEGER,
-                    true_suppressions INTEGER,
-                    metadata TEXT
-                )
-            """)
+            conn.execute(_RUN_METRICS_DDL)
+            conn.execute(_MEMORY_METRICS_DDL)
+            conn.execute(_USER_METRICS_DDL)
 
     def store_run(self, metrics: RunMetrics) -> None:
         """Store run metrics."""
