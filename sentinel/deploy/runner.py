@@ -167,6 +167,21 @@ def create_parser() -> argparse.ArgumentParser:
         type=str,
         help="Directory to store run metrics for evaluation (ADLC Monitor phase)",
     )
+    parser.add_argument(
+        "--memory-dir",
+        type=str,
+        help="Directory for Sentinel Memory persistence (enables memory retrieval)",
+    )
+    parser.add_argument(
+        "--no-memory",
+        action="store_true",
+        help="Disable memory retrieval even if --memory-dir is set",
+    )
+    parser.add_argument(
+        "--consolidate-memory",
+        action="store_true",
+        help="Run memory consolidation after review",
+    )
     return parser
 
 
@@ -270,6 +285,46 @@ def _print_trace_summary(tracer: Tracer) -> None:
         print(f"  Errors: {trace_summary['errors']}", file=sys.stderr)
 
 
+def _setup_memory(memory_dir: str) -> dict | None:
+    """Set up Sentinel Memory retrieval from a directory."""
+    from pathlib import Path
+
+    from ..memory.retriever import MemoryRetriever
+    from ..memory.store import MemoryStore
+
+    mem_path = Path(memory_dir)
+    mem_path.mkdir(parents=True, exist_ok=True)
+    db_path = mem_path / "memory.db"
+
+    store = MemoryStore(str(db_path))
+    retriever = MemoryRetriever(store)
+    return {"retriever": retriever, "store": store, "path": mem_path}
+
+
+def _run_consolidation(memory_dir: str, _files: list[tuple[str, str, str]]) -> None:
+    """Run memory consolidation after review."""
+    from pathlib import Path
+
+    from ..memory.consolidation import ConsolidationJob
+    from ..memory.store import MemoryStore
+
+    mem_path = Path(memory_dir)
+    db_path = mem_path / "memory.db"
+
+    if not db_path.exists():
+        return
+
+    store = MemoryStore(str(db_path))
+    job = ConsolidationJob(store)
+    result = job.run_once()
+
+    print(
+        f"🧠 Memory consolidated: {result['new_stored']} new, "
+        f"{result['expired_removed']} expired removed",
+        file=sys.stderr,
+    )
+
+
 def _write_output(report, summary_text: str, args: argparse.Namespace, tracer: Tracer) -> None:
     if args.format == "json":
         output = to_json(report, summary_text)
@@ -313,8 +368,17 @@ def main(argv: list[str] | None = None) -> int:
     tracer = Tracer(log_dir=args.trace_dir, enabled=True, metrics_dir=args.metrics_dir)
     cost_tracker = CostTracker(cost_cap=args.cost_cap)
     agents = _setup_agents(cfg, set(args.disable_agent or []), args)
+
+    memory_context = None
+    if args.memory_dir and not args.no_memory:
+        memory_context = _setup_memory(args.memory_dir)
+
     orchestrator = Orchestrator(
-        agents=agents, tracer=tracer, cost_tracker=cost_tracker, max_workers=args.workers
+        agents=agents,
+        tracer=tracer,
+        cost_tracker=cost_tracker,
+        max_workers=args.workers,
+        memory_context=memory_context,
     )
 
     files = collect_files(args.paths, exclude_patterns)
@@ -354,6 +418,9 @@ def main(argv: list[str] | None = None) -> int:
             if lang:
                 languages[lang] = languages.get(lang, 0) + 1
         tracer.collect_run_metrics(files_reviewed=len(files), languages=languages)
+
+    if args.consolidate_memory and args.memory_dir:
+        _run_consolidation(args.memory_dir, files)
 
     _write_output(report, summary_text, args, tracer)
     return 0 if report.score >= 50 else 1

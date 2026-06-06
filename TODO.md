@@ -322,6 +322,8 @@ sentinel/memory/
 ├── conflict.py       # Resolve contradictory memories (conflict node)
 ├── synthesizer.py    # Combine related memories (synthesis node)
 ├── temporal.py       # Aging, decay, expiration
-├── eval.py           # Evaluation metrics
+├── consolidation.py  # Periodic background synthesis
+├── eval.py           # Evaluation metrics (precision, recall, F1)
+├── ab_framework.py   # A/B comparison with/without memory
 └── __init__.py       # Public API
 ```

@@ -179,6 +179,8 @@ def run_coverage_check(files):
 
     old_cwd = os.getcwd()
     os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    old_stderr = sys.stderr
+    sys.stderr = open(os.devnull, "w")
     try:
         cov = coverage.Coverage(source=["sentinel"], omit=["sentinel/test/*"])
         cov.start()
@@ -192,11 +194,13 @@ def run_coverage_check(files):
         total = cov.report(file=open(os.devnull, "w"))
         cov.erase()
     except Exception as e:
+        sys.stderr = old_stderr
         print(f"⚠️  Coverage check failed: {e}")
         print("   Skipping coverage check")
         os.chdir(old_cwd)
         return True
     finally:
+        sys.stderr = old_stderr
         os.chdir(old_cwd)
 
     threshold = 85.0
