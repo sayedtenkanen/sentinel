@@ -35,6 +35,7 @@ class Orchestrator:
         tracer: Tracer | None = None,
         cost_tracker: CostTracker | None = None,
         max_workers: int | None = None,
+        memory_context: dict | None = None,
     ) -> None:
         self.agents = agents or [
             StaticAnalysisAgent(),
@@ -49,6 +50,7 @@ class Orchestrator:
         self.tracer = tracer or Tracer()
         self.cost_tracker = cost_tracker or CostTracker()
         self.max_workers = max_workers
+        self.memory_context = memory_context
 
     def review(self, context: ReviewContext) -> ReviewReport:
         """Run all agents on all files in the context.
@@ -61,11 +63,21 @@ class Orchestrator:
             files_reviewed=context.files,
         )
 
+        memory_retrieved = False
+        memory_count = 0
+        if self.memory_context:
+            memory_retrieved, memory_count = self._retrieve_memories(context)
+
         self.tracer.trace(
             TraceEvent(
                 agent_name="orchestrator",
                 event="review.started",
-                metadata={"files": len(context.files), "scope": context.scope.value},
+                metadata={
+                    "files": len(context.files),
+                    "scope": context.scope.value,
+                    "memory_retrieved": memory_retrieved,
+                    "memory_count": memory_count,
+                },
             )
         )
 
@@ -214,3 +226,44 @@ class Orchestrator:
             if result.agent_name == name:
                 return result
         return None
+
+    def _retrieve_memories(self, context: ReviewContext) -> tuple[bool, int]:
+        """Retrieve memories and inject context for agents.
+
+        Returns (was_retrieved, memory_count).
+        """
+        if not self.memory_context:
+            return False, 0
+
+        retriever = self.memory_context.get("retriever")
+        if not retriever:
+            return False, 0
+
+        from ..memory.retriever import RetrievalContext
+
+        languages = list({f.language for f in context.files if f.language})
+        file_paths = [f.path for f in context.files]
+
+        retrieval_ctx = RetrievalContext(
+            file_paths=file_paths,
+            languages=languages,
+            max_memories=10,
+        )
+
+        result = retriever.retrieve(retrieval_ctx)
+
+        if result.memories:
+            self.tracer.trace(
+                TraceEvent(
+                    agent_name="orchestrator",
+                    event="memory.retrieved",
+                    metadata={
+                        "count": len(result.memories),
+                        "total_available": result.total_available,
+                        "query_tags": result.query_tags,
+                    },
+                )
+            )
+            return True, len(result.memories)
+
+        return False, 0

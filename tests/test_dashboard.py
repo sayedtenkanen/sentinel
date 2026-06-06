@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
@@ -443,7 +444,14 @@ class TestMainFunction(unittest.TestCase):
         mock_server_class.return_value = mock_server
         mock_server.serve_forever.side_effect = KeyboardInterrupt()
 
-        result = main(["--port", "9999", "--trace-dir", "/tmp"])
+        import io
+
+        old_stderr = sys.stderr
+        sys.stderr = io.StringIO()
+        try:
+            result = main(["--port", "9999", "--trace-dir", "/tmp"])
+        finally:
+            sys.stderr = old_stderr
         self.assertEqual(result, 0)
         mock_server_class.assert_called_once()
         mock_server.serve_forever.assert_called_once()
@@ -457,7 +465,14 @@ class TestMainFunction(unittest.TestCase):
         mock_server_class.return_value = mock_server
         mock_server.serve_forever.side_effect = KeyboardInterrupt()
 
-        with patch("webbrowser.open") as mock_web:
-            result = main(["--open", "--trace-dir", "/tmp"])
-            self.assertEqual(result, 0)
-            mock_web.assert_called_once_with("http://localhost:8080")
+        import io
+
+        old_stderr = sys.stderr
+        sys.stderr = io.StringIO()
+        try:
+            with patch("webbrowser.open") as mock_web:
+                result = main(["--open", "--trace-dir", "/tmp"])
+        finally:
+            sys.stderr = old_stderr
+        self.assertEqual(result, 0)
+        mock_web.assert_called_once_with("http://localhost:8080")

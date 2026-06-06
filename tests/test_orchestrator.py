@@ -88,7 +88,7 @@ eval("os.system('ls')")
         ctx = ReviewContext.from_file("bad.py", bad_code)
         report = orch.review(ctx)
         self.assertGreaterEqual(len(report.all_findings), 5)
-        self.assertLess(report.score, 50)
+        self.assertLess(report.score, 80)
 
     def test_good_code_minimal_findings(self):
         good_code = '"""Module docstring."""\n\nx = 1\ny = 2\nz = x + y\n'

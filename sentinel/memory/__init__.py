@@ -14,7 +14,9 @@ Modules:
     conflict: Resolve contradictory memories (conflict node)
     synthesizer: Combine related memories (synthesis node)
     temporal: Aging, decay, expiration
-    eval: Evaluation metrics
+    consolidation: Periodic background synthesis
+    eval: Evaluation metrics (precision, recall, F1)
+    ab_framework: A/B comparison with/without memory
 """
 
 from sentinel.memory.graph import Edge, Graph, GraphState, Node, linear_graph

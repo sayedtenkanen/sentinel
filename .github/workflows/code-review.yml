@@ -145,13 +145,21 @@ jobs:
             body += `| 🔵 Low | ${sev.low} |\n| ⚪ Info | ${sev.info} |\n\n### Top Issues\n\n`;
             const order = {critical: 0, high: 1, medium: 2, low: 3, info: 4};
             report.findings.sort((a, b) => order[a.severity] - order[b.severity]);
-            for (const f of report.findings.slice(0, 10))
+            const limit = 25;
+            for (const f of report.findings.slice(0, limit))
               body += `- **${f.severity.toUpperCase()}** \`${f.rule_id}\`: ${f.message} (${f.file}:${f.line || '-'})\n`;
-            if (report.findings.length > 10)
-              body += `\n*...and ${report.findings.length - 10} more findings*\n`;
+            if (report.findings.length > limit)
+              body += `\n*...and ${report.findings.length - limit} more findings. [Download full report](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.*\n`;
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: body,
             });
+      - name: Upload full report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: review-report
+          path: review_report.json
+          retention-days: 30
