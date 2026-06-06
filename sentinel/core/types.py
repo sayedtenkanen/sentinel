@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import math
 import uuid
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -115,12 +117,17 @@ class ReviewReport:
     def score(self) -> int:
         if not self.all_findings:
             return 100
-        severity_weights = {
-            Severity.CRITICAL: 25,
-            Severity.HIGH: 10,
-            Severity.MEDIUM: 5,
-            Severity.LOW: 2,
+        severity_multipliers = {
+            Severity.CRITICAL: 12,
+            Severity.HIGH: 6,
+            Severity.MEDIUM: 3,
+            Severity.LOW: 0.5,
             Severity.INFO: 0,
         }
-        deductions = sum(severity_weights.get(f.severity, 0) for f in self.all_findings)
-        return max(0, min(100, 100 - deductions))
+        counts = Counter(f.severity for f in self.all_findings)
+        deductions = 0.0
+        for sev, count in counts.items():
+            multiplier = severity_multipliers.get(sev, 0)
+            if multiplier > 0 and count > 0:
+                deductions += multiplier * (1 + math.log(count))
+        return max(0, min(100, round(100 - deductions)))
