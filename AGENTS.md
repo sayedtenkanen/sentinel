@@ -2,6 +2,16 @@
 
 > **Python + JavaScript.** `.py` and `.js` files are discovered and analyzed. Other languages return empty results via `NullParser`. Add language support by implementing `BaseParser` and registering it in `ParserRegistry`.
 
+## CRITICAL: Branching Rule
+
+**NEVER push directly to `main`.** Always:
+1. Create a feature branch: `git checkout -b feature/your-feature main`
+2. Commit on the branch
+3. Push the branch: `git push -u origin feature/your-feature`
+4. Create a PR and get it reviewed before merging
+
+Violating this rule breaks the CI pipeline and review process.
+
 ## Project Structure
 
 ```
