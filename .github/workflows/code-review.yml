@@ -11,6 +11,18 @@ on:
   workflow_dispatch:
 
 jobs:
+  require-pr:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: ❌ Direct push to main is not allowed
+        run: |
+          echo "::error::Direct commits to 'main' are forbidden. Use a feature branch + PR."
+          echo "  git checkout -b feature/your-feature main"
+          echo "  git push -u origin feature/your-feature"
+          echo "  gh pr create --fill"
+          exit 1
+
   ruff-ty:
     runs-on: ubuntu-latest
     steps:
@@ -96,7 +108,7 @@ jobs:
         run: python -m sentinel.test.evals
 
   review:
-    needs: [ruff-ty, security-scan, unit-tests, evals]
+    needs: [require-pr, ruff-ty, security-scan, unit-tests, evals]
     runs-on: ubuntu-latest
     permissions:
       contents: read

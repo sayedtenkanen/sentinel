@@ -199,6 +199,28 @@ Cost governance, agent registry, and policy enforcement.
 | **Suppress rules** | `.code-review.json` + `runner.py` | fnmatch-based suppression on `rule_id` + `file` pattern, applied after review via `suppress_findings()` |
 | **Audit** | Trace files + tracer | Every `run.started`/`run.completed`/`review.completed` event logged with duration, finding count, cost, errors — full JSON audit trail |
 
+## Contributing
+
+**`main` is off-limits for direct commits.** All changes go through feature branches and PRs.
+
+```bash
+# 1. Branch from main
+git checkout -b feature/your-feature main
+
+# 2. Make changes, run checks
+python -m ruff check sentinel/ tests/
+python -m ruff format --check sentinel/ tests/
+python -m ty check sentinel/
+python -m unittest discover -s tests/ -q
+python -m sentinel.test.evals
+
+# 3. Push and open a PR
+git push -u origin feature/your-feature
+gh pr create --fill
+```
+
+Violating this rule breaks CI and review. See [CONTRIBUTING.md](CONTRIBUTING.md) for full details.
+
 ## Quality
 
 ```bash

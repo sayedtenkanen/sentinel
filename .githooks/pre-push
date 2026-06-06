@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Pre-push hook: blocks direct pushes to main
+# All changes must go through feature branches + PRs.
+
+current_branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+if [ "$current_branch" = "main" ]; then
+    echo "❌ Direct push to 'main' is not allowed."
+    echo ""
+    echo "Use a feature branch instead:"
+    echo "  git checkout -b feature/your-feature"
+    echo "  git push -u origin feature/your-feature"
+    echo "  gh pr create --fill"
+    exit 1
+fi
