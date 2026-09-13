@@ -252,8 +252,11 @@ class PythonParser(BaseParser):
         try:
             tree = ast.parse(source)
             for node in ast.walk(tree):
-                if isinstance(node, ast.FunctionDef):
-                    for default in node.args.defaults:
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    all_defaults = list(node.args.defaults) + [
+                        d for d in node.args.kw_defaults if d is not None
+                    ]
+                    for default in all_defaults:
                         if isinstance(default, (ast.List, ast.Dict, ast.Set)):
                             results.append(
                                 MutableDefault(
@@ -293,7 +296,9 @@ class PythonParser(BaseParser):
         try:
             tree = ast.parse(source)
             for node in ast.walk(tree):
-                if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
+                if isinstance(
+                    node, (ast.FunctionDef, ast.AsyncFunctionDef)
+                ) and not node.name.startswith("_"):
                     returns_hint = node.returns is not None
                     params_hint = all(
                         arg.annotation is not None or arg.arg == "self" for arg in node.args.args
