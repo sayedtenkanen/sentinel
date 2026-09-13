@@ -13,7 +13,12 @@
         {"rule": "ST005", "pattern": "*"},
         {"rule": "ST009", "pattern": "**/context_hub.py"},
         {"rule": "DOC006", "pattern": "*"},
-        {"rule": "ST001", "pattern": "**/dashboard.py"}
+        {"rule": "ST001", "pattern": "**/dashboard.py"},
+        {"rule": "REF001", "pattern": "**/parsers/*.py"},
+        {"rule": "REF002", "pattern": "**/parsers/*.py"},
+        {"rule": "DOC005", "pattern": "**/parsers/*.py"},
+        {"rule": "ARC004", "pattern": "**/parsers/*.py"},
+        {"rule": "STY004", "pattern": "**/parsers/*.py"}
     ],
     "agents": {
         "static-analysis": {

@@ -15,6 +15,7 @@ from .go import GoParser
 from .javascript import JavaScriptParser
 from .null import NullParser
 from .python import PythonParser
+from .rust import RustParser
 
 
 class ParserRegistry:
@@ -28,6 +29,7 @@ class ParserRegistry:
             "typescriptreact": JavaScriptParser(),
             "javascriptreact": JavaScriptParser(),
             "go": GoParser(),
+            "rust": RustParser(),
         }
 
     def register(self, language: str, parser: BaseParser) -> None:
@@ -60,5 +62,6 @@ __all__ = [
     "NullParser",
     "ParserRegistry",
     "PythonParser",
+    "RustParser",
     "default_registry",
 ]
